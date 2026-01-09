@@ -4,7 +4,18 @@
 
 ## Overview
 
-This repository is part of the ShareBridge project - a platform for dignified charitable giving.
+This repository contains the **cross-platform mobile application** for ShareBridge, serving both donors and alms seekers.
+
+**Key Features:**
+- 📱 Donor interface: Quick order placement, location validation, order tracking
+- 🙋 Seeker interface: QR code generation, location sharing, delivery confirmation
+- 📸 Camera integration for photo verification
+- 🗺️ Real-time location services and safety assessment
+- 🔔 Push notifications for order status updates
+- 🌐 Multi-language support (English, Tamil, Hindi, regional languages)
+- 🎨 Accessible design for users with varying literacy levels
+
+**Technology Stack:** React Native or Flutter (TBD based on community input)
 
 For overall project context, see the [main ShareBridge repository](https://github.com/sharebridge/sharebridge).
 
