@@ -67,6 +67,8 @@ flutter test
 
 Design reference sequence:
 - `sharebridge/design/Donor_Setup_AI_Search_Sequence.md`
+- Contract reference:
+  - `https://github.com/sharebridge/sharebridge/blob/main/design/contracts/donor_setup_suggest_vendors.openapi.yaml`
 
 ## License
 
