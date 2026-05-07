@@ -18,7 +18,10 @@ class DonorSetupPage extends StatefulWidget {
 }
 
 class _DonorSetupPageState extends State<DonorSetupPage> {
-  static const String _defaultApiBaseUrl = 'http://localhost:8080';
+  static const String _defaultApiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:8080',
+  );
   final TextEditingController _queryController = TextEditingController();
   late final SuggestVendorsUseCase _suggestVendorsUseCase;
   final List<VendorSuggestion> _suggestions = <VendorSuggestion>[];

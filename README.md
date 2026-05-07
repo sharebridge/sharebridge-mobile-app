@@ -65,6 +65,19 @@ flutter pub get
 flutter test
 ```
 
+Run app with configurable backend URL:
+
+```bash
+# Windows desktop (backend on same machine)
+flutter run --dart-define=API_BASE_URL=http://localhost:8080
+
+# Android emulator (maps host machine localhost)
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080
+
+# Physical device (use your machine LAN IP)
+flutter run --dart-define=API_BASE_URL=http://192.168.1.25:8080
+```
+
 Design reference sequence:
 - `sharebridge/design/Donor_Setup_AI_Search_Sequence.md`
 - Contract reference:
