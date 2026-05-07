@@ -52,7 +52,17 @@ class HttpDonorSetupApiClient implements DonorSetupApiClient {
 
   @override
   Future<void> savePresets(List<Map<String, dynamic>> payload) async {
-    // Persistence endpoint will be implemented in the next API iteration.
-    return;
+    final uri = Uri.parse('$baseUrl/v1/donor-setup/preferences');
+    final request = await _httpClient.postUrl(uri);
+    request.headers.contentType = ContentType.json;
+    request.write(jsonEncode(<String, dynamic>{'presets': payload}));
+
+    final response = await request.close();
+    final body = await utf8.decodeStream(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw HttpException(
+        'Save presets failed with status ${response.statusCode}: $body',
+      );
+    }
   }
 }
