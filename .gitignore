@@ -37,3 +37,10 @@ yarn-error.log*
 # Misc
 .cache/
 .temp/
+
+# Flutter / Dart
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata

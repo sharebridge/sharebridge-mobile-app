@@ -1,17 +1,42 @@
 import 'package:flutter/material.dart';
 
+import '../../application/suggest_vendors_usecase.dart';
+import '../../data/donor_setup_repository_impl.dart';
+import '../../data/http_donor_setup_api_client.dart';
+import '../../domain/models/vendor_suggestion.dart';
+
 class DonorSetupPage extends StatefulWidget {
-  const DonorSetupPage({super.key});
+  const DonorSetupPage({
+    super.key,
+    this.suggestVendorsUseCase,
+  });
+
+  final SuggestVendorsUseCase? suggestVendorsUseCase;
 
   @override
   State<DonorSetupPage> createState() => _DonorSetupPageState();
 }
 
 class _DonorSetupPageState extends State<DonorSetupPage> {
+  static const String _defaultApiBaseUrl = 'http://localhost:8080';
   final TextEditingController _queryController = TextEditingController();
-  final List<String> _suggestions = <String>[];
+  late final SuggestVendorsUseCase _suggestVendorsUseCase;
+  final List<VendorSuggestion> _suggestions = <VendorSuggestion>[];
   bool _loading = false;
+  String? _errorText;
   final Set<int> _selected = <int>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _suggestVendorsUseCase =
+        widget.suggestVendorsUseCase ??
+        SuggestVendorsUseCase(
+          DonorSetupRepositoryImpl(
+            HttpDonorSetupApiClient(baseUrl: _defaultApiBaseUrl),
+          ),
+        );
+  }
 
   @override
   void dispose() {
@@ -24,20 +49,34 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       _loading = true;
       _suggestions.clear();
       _selected.clear();
+      _errorText = null;
     });
 
-    await Future<void>.delayed(const Duration(milliseconds: 150));
-
-    setState(() {
-      _suggestions.addAll(
-        <String>[
-          'A2B - Veg Meals',
-          'Saravana Bhavan - Mini Tiffin',
-          'Sangeetha - Lemon Rice Combo',
-        ],
+    try {
+      final results = await _suggestVendorsUseCase(
+        queryText: _queryController.text.trim(),
+        locationPermissionGranted: false,
+        manualArea: 'Chennai',
       );
-      _loading = false;
-    });
+
+      setState(() {
+        _suggestions.addAll(results);
+      });
+    } catch (error) {
+      setState(() {
+        _errorText = 'Unable to fetch suggestions. $error';
+      });
+    } finally {
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  String _suggestionTitle(VendorSuggestion suggestion) {
+    final firstMenu =
+        suggestion.menuItems.isNotEmpty ? suggestion.menuItems.first : 'Menu';
+    return '${suggestion.restaurantName} - $firstMenu';
   }
 
   @override
@@ -62,13 +101,22 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
             ),
             const SizedBox(height: 12),
             if (_loading) const CircularProgressIndicator(),
+            if (_errorText != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  _errorText!,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
             Expanded(
               child: ListView.builder(
                 itemCount: _suggestions.length,
                 itemBuilder: (BuildContext context, int index) {
                   final selected = _selected.contains(index);
                   return CheckboxListTile(
-                    title: Text(_suggestions[index]),
+                    title: Text(_suggestionTitle(_suggestions[index])),
+                    subtitle: Text(_suggestions[index].appName),
                     value: selected,
                     onChanged: (_) {
                       setState(() {
