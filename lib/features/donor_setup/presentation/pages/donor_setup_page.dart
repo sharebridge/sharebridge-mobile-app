@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../application/confirm_presets_usecase.dart';
 import '../../application/load_presets_usecase.dart';
 import '../../application/suggest_vendors_usecase.dart';
+import '../../data/donor_setup_api_exceptions.dart';
 import '../../data/donor_setup_repository_impl.dart';
 import '../../data/http_donor_setup_api_client.dart';
 import '../../domain/models/donor_preset.dart';
@@ -99,7 +100,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       });
     } catch (error) {
       setState(() {
-        _errorText = 'Unable to fetch suggestions. $error';
+        _errorText = 'Unable to fetch suggestions. ${_friendlyError(error)}';
       });
     } finally {
       setState(() {
@@ -139,13 +140,32 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       });
     } catch (error) {
       setState(() {
-        _errorText = 'Unable to save presets. $error';
+        _errorText = 'Unable to save presets. ${_friendlyError(error)}';
       });
     } finally {
       setState(() {
         _saving = false;
       });
     }
+  }
+
+  String _friendlyError(Object error) {
+    if (error is DonorSetupTimeoutException) {
+      return 'The server took too long to respond. Please try again.';
+    }
+    if (error is DonorSetupNetworkException) {
+      return 'Network unavailable. Check your connection and retry.';
+    }
+    if (error is DonorSetupServerException) {
+      return 'Server is temporarily unavailable (HTTP ${error.statusCode}).';
+    }
+    if (error is DonorSetupBadRequestException) {
+      return error.message;
+    }
+    if (error is DonorSetupResponseException) {
+      return 'Received an unexpected response from the server.';
+    }
+    return error.toString();
   }
 
   Future<void> _loadInitialPresets() async {

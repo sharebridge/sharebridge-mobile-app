@@ -56,7 +56,9 @@ See the [main repository's CALL_FOR_CONTRIBUTORS.md](https://github.com/sharebri
 This repository now includes a lightweight Flutter starter scaffold for AI-assisted donor setup:
 
 - `lib/features/donor_setup/` - domain, application, data, presentation layers
-- `test/features/donor_setup/` - initial usecase, DTO, and UI widget tests
+- `test/features/donor_setup/` - initial usecase, DTO, UI widget, and HTTP client tests
+- `lib/features/donor_setup/data/donor_setup_api_exceptions.dart` - typed API exceptions
+- `lib/features/donor_setup/data/http_donor_setup_api_client.dart` - HTTP client with configurable timeout and exponential-backoff retry policy
 
 Run locally:
 
