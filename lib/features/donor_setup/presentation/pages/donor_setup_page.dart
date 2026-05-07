@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../application/confirm_presets_usecase.dart';
 import '../../application/load_presets_usecase.dart';
 import '../../application/suggest_vendors_usecase.dart';
+import '../../data/auth_context.dart';
 import '../../data/donor_setup_api_exceptions.dart';
 import '../../data/donor_setup_repository_impl.dart';
 import '../../data/http_donor_setup_api_client.dart';
@@ -18,11 +19,13 @@ class DonorSetupPage extends StatefulWidget {
     this.suggestVendorsUseCase,
     this.confirmPresetsUseCase,
     this.loadPresetsUseCase,
+    this.authContext,
   });
 
   final SuggestVendorsUseCase? suggestVendorsUseCase;
   final ConfirmPresetsUseCase? confirmPresetsUseCase;
   final LoadPresetsUseCase? loadPresetsUseCase;
+  final AuthContext? authContext;
 
   @override
   State<DonorSetupPage> createState() => _DonorSetupPageState();
@@ -33,9 +36,9 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     'API_BASE_URL',
     defaultValue: 'http://localhost:8080',
   );
-  static const String _userId = 'demo-user';
   static const String _cacheKey = 'donor_setup_presets_cache';
   final TextEditingController _queryController = TextEditingController();
+  late final AuthContext _authContext;
   late final SuggestVendorsUseCase _suggestVendorsUseCase;
   late final ConfirmPresetsUseCase _confirmPresetsUseCase;
   late final LoadPresetsUseCase _loadPresetsUseCase;
@@ -49,25 +52,35 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   @override
   void initState() {
     super.initState();
+    _authContext = widget.authContext ?? AuthContext.fromEnvironment();
     _suggestVendorsUseCase =
         widget.suggestVendorsUseCase ??
         SuggestVendorsUseCase(
           DonorSetupRepositoryImpl(
-            HttpDonorSetupApiClient(baseUrl: _defaultApiBaseUrl),
+            HttpDonorSetupApiClient(
+              baseUrl: _defaultApiBaseUrl,
+              authContext: _authContext,
+            ),
           ),
         );
     _confirmPresetsUseCase =
         widget.confirmPresetsUseCase ??
         ConfirmPresetsUseCase(
           DonorSetupRepositoryImpl(
-            HttpDonorSetupApiClient(baseUrl: _defaultApiBaseUrl),
+            HttpDonorSetupApiClient(
+              baseUrl: _defaultApiBaseUrl,
+              authContext: _authContext,
+            ),
           ),
         );
     _loadPresetsUseCase =
         widget.loadPresetsUseCase ??
         LoadPresetsUseCase(
           DonorSetupRepositoryImpl(
-            HttpDonorSetupApiClient(baseUrl: _defaultApiBaseUrl),
+            HttpDonorSetupApiClient(
+              baseUrl: _defaultApiBaseUrl,
+              authContext: _authContext,
+            ),
           ),
         );
     _loadInitialPresets();
@@ -133,7 +146,10 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
         .toList();
 
     try {
-      await _confirmPresetsUseCase(userId: _userId, presets: presets);
+      await _confirmPresetsUseCase(
+        userId: _authContext.userId,
+        presets: presets,
+      );
       await _cachePresets(presets);
       setState(() {
         _statusText = 'Presets saved successfully.';
@@ -170,7 +186,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
 
   Future<void> _loadInitialPresets() async {
     try {
-      final presets = await _loadPresetsUseCase(userId: _userId);
+      final presets = await _loadPresetsUseCase(userId: _authContext.userId);
       if (presets.isNotEmpty) {
         setState(() {
           _suggestions

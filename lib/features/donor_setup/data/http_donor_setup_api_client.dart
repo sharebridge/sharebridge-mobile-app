@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'auth_context.dart';
 import 'donor_setup_api_client.dart';
 import 'donor_setup_api_exceptions.dart';
 
@@ -39,15 +40,18 @@ class RetryPolicy {
 class HttpDonorSetupApiClient implements DonorSetupApiClient {
   HttpDonorSetupApiClient({
     required this.baseUrl,
+    AuthContext? authContext,
     HttpClient? httpClient,
     this.requestTimeout = const Duration(seconds: 8),
     this.retryPolicy = const RetryPolicy(),
     this.savePresetsRetryPolicy = RetryPolicy.mutating,
-  }) : _httpClient = httpClient ?? HttpClient() {
+  })  : _authContext = authContext ?? AuthContext.fromEnvironment(),
+        _httpClient = httpClient ?? HttpClient() {
     _httpClient.connectionTimeout = requestTimeout;
   }
 
   final String baseUrl;
+  final AuthContext _authContext;
   final HttpClient _httpClient;
   final Duration requestTimeout;
   final RetryPolicy retryPolicy;
@@ -131,6 +135,9 @@ class HttpDonorSetupApiClient implements DonorSetupApiClient {
       final request = method == 'GET'
           ? await _httpClient.getUrl(uri)
           : await _httpClient.postUrl(uri);
+      _authContext.toHeaders().forEach((name, value) {
+        request.headers.set(name, value);
+      });
       if (body != null) {
         request.headers.contentType = ContentType.json;
         request.write(jsonEncode(body));

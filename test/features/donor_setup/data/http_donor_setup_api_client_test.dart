@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sharebridge_mobile_app/features/donor_setup/data/auth_context.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/data/donor_setup_api_exceptions.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/data/http_donor_setup_api_client.dart';
 
@@ -174,6 +175,44 @@ void main() {
       ),
       throwsA(isA<DonorSetupResponseException>()),
     );
+  });
+
+  test('client sends Bearer demo.<user_id> and X-User-Id headers', () async {
+    final List<String> sawAuthorization = <String>[];
+    final List<String> sawXUserId = <String>[];
+    final server = _ScriptedServer((HttpRequest request) async {
+      sawAuthorization
+          .add(request.headers.value('authorization') ?? '<missing>');
+      sawXUserId.add(request.headers.value('x-user-id') ?? '<missing>');
+      request.response
+        ..statusCode = 200
+        ..headers.contentType = ContentType.json
+        ..write(
+          jsonEncode(<String, dynamic>{
+            'suggestions': <Map<String, dynamic>>[],
+            'generated_at': '2026-05-07T00:00:00Z',
+          }),
+        );
+      await request.response.close();
+    });
+    final baseUrl = await server.start();
+    addTearDown(server.stop);
+
+    final client = HttpDonorSetupApiClient(
+      baseUrl: baseUrl,
+      authContext: const AuthContext(userId: 'alice'),
+      retryPolicy: const RetryPolicy(maxAttempts: 1),
+    );
+
+    await client.suggestVendors(
+      queryText: 'zomato',
+      lat: null,
+      lng: null,
+      manualArea: 'Chennai',
+    );
+
+    expect(sawAuthorization.single, 'Bearer demo.alice');
+    expect(sawXUserId.single, 'alice');
   });
 
   test('savePresets does not retry on 5xx (mutating policy)', () async {

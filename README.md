@@ -59,6 +59,7 @@ This repository now includes a lightweight Flutter starter scaffold for AI-assis
 - `test/features/donor_setup/` - initial usecase, DTO, UI widget, and HTTP client tests
 - `lib/features/donor_setup/data/donor_setup_api_exceptions.dart` - typed API exceptions
 - `lib/features/donor_setup/data/http_donor_setup_api_client.dart` - HTTP client with configurable timeout and exponential-backoff retry policy
+- `lib/features/donor_setup/data/auth_context.dart` - minimal auth context (carries `user_id` from `--dart-define=USER_ID=...`, sends `Authorization: Bearer demo.<user_id>` + `X-User-Id` headers)
 
 Run locally:
 
@@ -67,18 +68,23 @@ flutter pub get
 flutter test
 ```
 
-Run app with configurable backend URL:
+Run app with configurable backend URL and donor identity:
 
 ```bash
 # Windows desktop (backend on same machine)
-flutter run --dart-define=API_BASE_URL=http://localhost:8080
+flutter run --dart-define=API_BASE_URL=http://localhost:8080 --dart-define=USER_ID=demo-user
 
 # Android emulator (maps host machine localhost)
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080 --dart-define=USER_ID=demo-user
 
 # Physical device (use your machine LAN IP)
-flutter run --dart-define=API_BASE_URL=http://192.168.1.25:8080
+flutter run --dart-define=API_BASE_URL=http://192.168.1.25:8080 --dart-define=USER_ID=demo-user
 ```
+
+`USER_ID` is optional and defaults to `demo-user`. The mobile client signs
+every request with `Authorization: Bearer demo.<USER_ID>` plus `X-User-Id`.
+This is a non-cryptographic MVP placeholder — real auth ships with
+sharebridge-user-service.
 
 Design reference sequence:
 - `sharebridge/design/Donor_Setup_AI_Search_Sequence.md`
