@@ -8,7 +8,15 @@ class _RecordingRepository implements DonorSetupRepository {
   List<DonorPreset> saved = <DonorPreset>[];
 
   @override
-  Future<void> savePresets(List<DonorPreset> presets) async {
+  Future<List<DonorPreset>> loadPresets({required String userId}) async {
+    return <DonorPreset>[];
+  }
+
+  @override
+  Future<void> savePresets({
+    required String userId,
+    required List<DonorPreset> presets,
+  }) async {
     saved = presets;
   }
 
@@ -37,12 +45,15 @@ void main() {
       confidence: 0.9,
     );
 
-    await useCase(<DonorPreset>[preset]);
+    await useCase(userId: 'demo-user', presets: <DonorPreset>[preset]);
     expect(repo.saved.length, 1);
   });
 
   test('throws when preset list is empty', () async {
     final useCase = ConfirmPresetsUseCase(_RecordingRepository());
-    expect(() => useCase(<DonorPreset>[]), throwsA(isA<ArgumentError>()));
+    expect(
+      () => useCase(userId: 'demo-user', presets: <DonorPreset>[]),
+      throwsA(isA<ArgumentError>()),
+    );
   });
 }

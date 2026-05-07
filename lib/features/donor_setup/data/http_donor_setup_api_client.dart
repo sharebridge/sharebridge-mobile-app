@@ -51,11 +51,38 @@ class HttpDonorSetupApiClient implements DonorSetupApiClient {
   }
 
   @override
-  Future<void> savePresets(List<Map<String, dynamic>> payload) async {
+  Future<List<Map<String, dynamic>>> getPresets({required String userId}) async {
+    final uri = Uri.parse('$baseUrl/v1/donor-setup/preferences?user_id=$userId');
+    final request = await _httpClient.getUrl(uri);
+    final response = await request.close();
+    final body = await utf8.decodeStream(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw HttpException(
+        'Get presets failed with status ${response.statusCode}: $body',
+      );
+    }
+    final decoded = jsonDecode(body);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('API must return a JSON object');
+    }
+    final presetsRaw = decoded['presets'];
+    if (presetsRaw is! List) {
+      throw const FormatException('presets must be a list');
+    }
+    return presetsRaw.cast<Map<String, dynamic>>();
+  }
+
+  @override
+  Future<void> savePresets({
+    required String userId,
+    required List<Map<String, dynamic>> payload,
+  }) async {
     final uri = Uri.parse('$baseUrl/v1/donor-setup/preferences');
     final request = await _httpClient.postUrl(uri);
     request.headers.contentType = ContentType.json;
-    request.write(jsonEncode(<String, dynamic>{'presets': payload}));
+    request.write(
+      jsonEncode(<String, dynamic>{'user_id': userId, 'presets': payload}),
+    );
 
     final response = await request.close();
     final body = await utf8.decodeStream(response);

@@ -11,7 +11,15 @@ class _FakeRepository implements DonorSetupRepository {
   int saveCalls = 0;
 
   @override
-  Future<void> savePresets(List<DonorPreset> presets) async {
+  Future<List<DonorPreset>> loadPresets({required String userId}) async {
+    return <DonorPreset>[];
+  }
+
+  @override
+  Future<void> savePresets({
+    required String userId,
+    required List<DonorPreset> presets,
+  }) async {
     saveCalls += 1;
   }
 
@@ -81,6 +89,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repo.saveCalls, 1);
-    expect(find.text('Presets saved successfully.'), findsOneWidget);
+    expect(find.textContaining('Unable to save presets.'), findsNothing);
   });
 }

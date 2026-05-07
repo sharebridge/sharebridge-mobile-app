@@ -6,7 +6,15 @@ import 'package:sharebridge_mobile_app/features/donor_setup/domain/repositories/
 
 class _FakeRepository implements DonorSetupRepository {
   @override
-  Future<void> savePresets(List<DonorPreset> presets) async {}
+  Future<List<DonorPreset>> loadPresets({required String userId}) async {
+    return <DonorPreset>[];
+  }
+
+  @override
+  Future<void> savePresets({
+    required String userId,
+    required List<DonorPreset> presets,
+  }) async {}
 
   @override
   Future<List<VendorSuggestion>> suggestVendors({

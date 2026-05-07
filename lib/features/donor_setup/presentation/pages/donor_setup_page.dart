@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../application/confirm_presets_usecase.dart';
+import '../../application/load_presets_usecase.dart';
 import '../../application/suggest_vendors_usecase.dart';
 import '../../data/donor_setup_repository_impl.dart';
 import '../../data/http_donor_setup_api_client.dart';
@@ -12,10 +16,12 @@ class DonorSetupPage extends StatefulWidget {
     super.key,
     this.suggestVendorsUseCase,
     this.confirmPresetsUseCase,
+    this.loadPresetsUseCase,
   });
 
   final SuggestVendorsUseCase? suggestVendorsUseCase;
   final ConfirmPresetsUseCase? confirmPresetsUseCase;
+  final LoadPresetsUseCase? loadPresetsUseCase;
 
   @override
   State<DonorSetupPage> createState() => _DonorSetupPageState();
@@ -26,9 +32,12 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     'API_BASE_URL',
     defaultValue: 'http://localhost:8080',
   );
+  static const String _userId = 'demo-user';
+  static const String _cacheKey = 'donor_setup_presets_cache';
   final TextEditingController _queryController = TextEditingController();
   late final SuggestVendorsUseCase _suggestVendorsUseCase;
   late final ConfirmPresetsUseCase _confirmPresetsUseCase;
+  late final LoadPresetsUseCase _loadPresetsUseCase;
   final List<VendorSuggestion> _suggestions = <VendorSuggestion>[];
   bool _loading = false;
   bool _saving = false;
@@ -53,6 +62,14 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
             HttpDonorSetupApiClient(baseUrl: _defaultApiBaseUrl),
           ),
         );
+    _loadPresetsUseCase =
+        widget.loadPresetsUseCase ??
+        LoadPresetsUseCase(
+          DonorSetupRepositoryImpl(
+            HttpDonorSetupApiClient(baseUrl: _defaultApiBaseUrl),
+          ),
+        );
+    _loadInitialPresets();
   }
 
   @override
@@ -115,7 +132,8 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
         .toList();
 
     try {
-      await _confirmPresetsUseCase(presets);
+      await _confirmPresetsUseCase(userId: _userId, presets: presets);
+      await _cachePresets(presets);
       setState(() {
         _statusText = 'Presets saved successfully.';
       });
@@ -128,6 +146,89 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
         _saving = false;
       });
     }
+  }
+
+  Future<void> _loadInitialPresets() async {
+    try {
+      final presets = await _loadPresetsUseCase(userId: _userId);
+      if (presets.isNotEmpty) {
+        setState(() {
+          _suggestions
+            ..clear()
+            ..addAll(
+              presets
+                  .map(
+                    (preset) => VendorSuggestion(
+                      restaurantName: preset.restaurantName,
+                      menuItems: preset.menuItems,
+                      orderUrl: preset.orderUrl,
+                      appName: preset.appName,
+                      confidence: preset.confidence,
+                    ),
+                  )
+                  .toList(),
+            );
+          _statusText = 'Loaded saved presets from server.';
+        });
+        return;
+      }
+    } catch (_) {
+      // Fallback to local cache when remote load fails.
+    }
+    await _loadCachedPresets();
+  }
+
+  Future<void> _cachePresets(List<DonorPreset> presets) async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = presets
+        .map(
+          (preset) => <String, dynamic>{
+            'restaurant_name': preset.restaurantName,
+            'order_url': preset.orderUrl,
+            'menu_items': preset.menuItems,
+            'app_name': preset.appName,
+            'confidence': preset.confidence,
+          },
+        )
+        .toList();
+    await prefs.setString(_cacheKey, jsonEncode(payload));
+  }
+
+  Future<void> _loadCachedPresets() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString(_cacheKey);
+    if (cached == null || cached.isEmpty) {
+      return;
+    }
+    final decoded = jsonDecode(cached);
+    if (decoded is! List) {
+      return;
+    }
+    final suggestions = decoded
+        .whereType<Map<String, dynamic>>()
+        .map(
+          (item) => VendorSuggestion(
+            restaurantName: item['restaurant_name']?.toString() ?? '',
+            menuItems:
+                ((item['menu_items'] as List?) ?? const [])
+                    .map((e) => e.toString())
+                    .toList(),
+            orderUrl: item['order_url']?.toString() ?? '',
+            appName: item['app_name']?.toString() ?? 'Unknown',
+            confidence: (item['confidence'] as num?)?.toDouble() ?? 0.0,
+          ),
+        )
+        .where((item) => item.restaurantName.isNotEmpty)
+        .toList();
+    if (suggestions.isEmpty) {
+      return;
+    }
+    setState(() {
+      _suggestions
+        ..clear()
+        ..addAll(suggestions);
+      _statusText = 'Using cached presets (offline fallback).';
+    });
   }
 
   String _suggestionTitle(VendorSuggestion suggestion) {

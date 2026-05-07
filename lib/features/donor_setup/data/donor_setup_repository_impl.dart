@@ -26,7 +26,31 @@ class DonorSetupRepositoryImpl implements DonorSetupRepository {
   }
 
   @override
-  Future<void> savePresets(List<DonorPreset> presets) {
+  Future<List<DonorPreset>> loadPresets({required String userId}) async {
+    final payload = await _apiClient.getPresets(userId: userId);
+    return payload
+        .map(
+          (item) => DonorPreset(
+            restaurantName: item['restaurant_name']?.toString() ?? '',
+            orderUrl: item['order_url']?.toString() ?? '',
+            menuItems:
+                ((item['menu_items'] as List?) ?? const [])
+                    .map((e) => e.toString())
+                    .toList(),
+            appName: item['app_name']?.toString() ?? 'Unknown',
+            source: item['source']?.toString() ?? 'remote',
+            confidence: (item['confidence'] as num?)?.toDouble() ?? 0.0,
+          ),
+        )
+        .where((preset) => preset.restaurantName.isNotEmpty && preset.orderUrl.isNotEmpty)
+        .toList();
+  }
+
+  @override
+  Future<void> savePresets({
+    required String userId,
+    required List<DonorPreset> presets,
+  }) {
     final payload = presets
         .map(
           (preset) => <String, dynamic>{
@@ -40,6 +64,6 @@ class DonorSetupRepositoryImpl implements DonorSetupRepository {
         )
         .toList();
 
-    return _apiClient.savePresets(payload);
+    return _apiClient.savePresets(userId: userId, payload: payload);
   }
 }

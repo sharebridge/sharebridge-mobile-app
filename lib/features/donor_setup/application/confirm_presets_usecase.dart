@@ -6,10 +6,13 @@ class ConfirmPresetsUseCase {
 
   final DonorSetupRepository _repository;
 
-  Future<void> call(List<DonorPreset> presets) async {
+  Future<void> call({
+    required String userId,
+    required List<DonorPreset> presets,
+  }) async {
     if (presets.isEmpty) {
       throw ArgumentError('At least one confirmed preset is required.');
     }
-    await _repository.savePresets(presets);
+    await _repository.savePresets(userId: userId, presets: presets);
   }
 }

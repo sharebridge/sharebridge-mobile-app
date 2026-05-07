@@ -9,5 +9,10 @@ abstract class DonorSetupRepository {
     String? manualArea,
   });
 
-  Future<void> savePresets(List<DonorPreset> presets);
+  Future<List<DonorPreset>> loadPresets({required String userId});
+
+  Future<void> savePresets({
+    required String userId,
+    required List<DonorPreset> presets,
+  });
 }

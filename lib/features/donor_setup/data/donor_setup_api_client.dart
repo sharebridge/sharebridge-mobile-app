@@ -6,5 +6,10 @@ abstract class DonorSetupApiClient {
     String? manualArea,
   });
 
-  Future<void> savePresets(List<Map<String, dynamic>> payload);
+  Future<List<Map<String, dynamic>>> getPresets({required String userId});
+
+  Future<void> savePresets({
+    required String userId,
+    required List<Map<String, dynamic>> payload,
+  });
 }
