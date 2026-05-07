@@ -51,6 +51,23 @@ See the [main repository's CALL_FOR_CONTRIBUTORS.md](https://github.com/sharebri
 - Joining GitHub Discussions
 - Submitting prompts and feature ideas
 
+## Day-1 Flutter Scaffold (MVP Kickoff)
+
+This repository now includes a lightweight Flutter starter scaffold for AI-assisted donor setup:
+
+- `lib/features/donor_setup/` - domain, application, data, presentation layers
+- `test/features/donor_setup/` - initial usecase, DTO, and UI widget tests
+
+Run locally:
+
+```bash
+flutter pub get
+flutter test
+```
+
+Design reference sequence:
+- `sharebridge/design/Donor_Setup_AI_Search_Sequence.md`
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
