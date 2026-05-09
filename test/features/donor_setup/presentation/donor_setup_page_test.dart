@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/application/confirm_presets_usecase.dart';
+import 'package:sharebridge_mobile_app/features/donor_setup/application/load_presets_usecase.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/application/suggest_vendors_usecase.dart';
+import 'package:sharebridge_mobile_app/features/donor_setup/data/donor_setup_api_exceptions.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/domain/models/donor_preset.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/domain/models/vendor_suggestion.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/domain/repositories/donor_setup_repository.dart';
@@ -9,10 +12,15 @@ import 'package:sharebridge_mobile_app/features/donor_setup/presentation/pages/d
 
 class _FakeRepository implements DonorSetupRepository {
   int saveCalls = 0;
+  bool throwOnLoad = false;
+  List<DonorPreset> loadResult = <DonorPreset>[];
 
   @override
   Future<List<DonorPreset>> loadPresets({required String userId}) async {
-    return <DonorPreset>[];
+    if (throwOnLoad) {
+      throw const DonorSetupNetworkException('offline');
+    }
+    return loadResult;
   }
 
   @override
@@ -43,6 +51,10 @@ class _FakeRepository implements DonorSetupRepository {
 }
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   testWidgets('search flow renders suggestions and confirm button exists', (
     WidgetTester tester,
   ) async {
@@ -51,10 +63,7 @@ void main() {
       MaterialApp(home: DonorSetupPage(suggestVendorsUseCase: useCase)),
     );
 
-    await tester.enterText(
-      find.byType(TextField),
-      'zomato a2b mini meals',
-    );
+    await tester.enterText(find.byType(TextField).first, 'zomato a2b mini meals');
     await tester.pump();
     await tester.tap(find.text('Suggest Vendors'));
     await tester.pumpAndSettle();
@@ -78,7 +87,7 @@ void main() {
       ),
     );
 
-    await tester.enterText(find.byType(TextField), 'sangeetha uppuma');
+    await tester.enterText(find.byType(TextField).first, 'sangeetha uppuma');
     await tester.pump();
     await tester.tap(find.text('Suggest Vendors'));
     await tester.pumpAndSettle();
@@ -90,5 +99,46 @@ void main() {
 
     expect(repo.saveCalls, 1);
     expect(find.textContaining('Unable to save presets.'), findsNothing);
+  });
+
+  testWidgets('shows server-empty message when API returns no presets', (
+    WidgetTester tester,
+  ) async {
+    final repo = _FakeRepository();
+    final loadUseCase = LoadPresetsUseCase(repo);
+    await tester.pumpWidget(
+      MaterialApp(home: DonorSetupPage(loadPresetsUseCase: loadUseCase)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No saved presets on server yet.'), findsOneWidget);
+    expect(find.text('Using cached presets (offline fallback).'), findsNothing);
+  });
+
+  testWidgets('clear cache action removes offline presets from view', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'donor_setup_presets_cache':
+          '[{"restaurant_name":"Cached Cafe","order_url":"https://cached.example","menu_items":["Meals"],"app_name":"Swiggy","confidence":0.8}]',
+    });
+    final repo = _FakeRepository()..throwOnLoad = true;
+    final loadUseCase = LoadPresetsUseCase(repo);
+
+    await tester.pumpWidget(
+      MaterialApp(home: DonorSetupPage(loadPresetsUseCase: loadUseCase)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cached Cafe - Meals'), findsOneWidget);
+
+    await tester.tap(find.text('Clear cache / Sign out'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cached Cafe - Meals'), findsNothing);
+    expect(
+      find.text('Cleared cached presets and signed out locally.'),
+      findsOneWidget,
+    );
   });
 }

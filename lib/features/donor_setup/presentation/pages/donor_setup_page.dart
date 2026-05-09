@@ -38,6 +38,9 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   );
   static const String _cacheKey = 'donor_setup_presets_cache';
   final TextEditingController _queryController = TextEditingController();
+  final TextEditingController _manualAreaController = TextEditingController(
+    text: 'Chennai',
+  );
   late final AuthContext _authContext;
   late final SuggestVendorsUseCase _suggestVendorsUseCase;
   late final ConfirmPresetsUseCase _confirmPresetsUseCase;
@@ -89,6 +92,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   @override
   void dispose() {
     _queryController.dispose();
+    _manualAreaController.dispose();
     super.dispose();
   }
 
@@ -105,7 +109,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       final results = await _suggestVendorsUseCase(
         queryText: _queryController.text.trim(),
         locationPermissionGranted: false,
-        manualArea: 'Chennai',
+        manualArea: _manualAreaController.text.trim(),
       );
 
       setState(() {
@@ -208,10 +212,21 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
         });
         return;
       }
-    } catch (_) {
-      // Fallback to local cache when remote load fails.
+      setState(() {
+        _statusText = 'No saved presets on server yet.';
+      });
+      return;
+    } catch (error) {
+      // Fallback to local cache only when server load fails.
+      final usedCache = await _loadCachedPresets();
+      if (usedCache) {
+        return;
+      }
+      setState(() {
+        _statusText =
+            'Server unreachable while loading presets. ${_friendlyError(error)}';
+      });
     }
-    await _loadCachedPresets();
   }
 
   Future<void> _cachePresets(List<DonorPreset> presets) async {
@@ -230,15 +245,15 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     await prefs.setString(_cacheKey, jsonEncode(payload));
   }
 
-  Future<void> _loadCachedPresets() async {
+  Future<bool> _loadCachedPresets() async {
     final prefs = await SharedPreferences.getInstance();
     final cached = prefs.getString(_cacheKey);
     if (cached == null || cached.isEmpty) {
-      return;
+      return false;
     }
     final decoded = jsonDecode(cached);
     if (decoded is! List) {
-      return;
+      return false;
     }
     final suggestions = decoded
         .whereType<Map<String, dynamic>>()
@@ -257,13 +272,29 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
         .where((item) => item.restaurantName.isNotEmpty)
         .toList();
     if (suggestions.isEmpty) {
-      return;
+      return false;
     }
     setState(() {
       _suggestions
         ..clear()
         ..addAll(suggestions);
       _statusText = 'Using cached presets (offline fallback).';
+    });
+    return true;
+  }
+
+  Future<void> _clearCachedPresetsAndSignOut() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_cacheKey);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _suggestions.clear();
+      _selected.clear();
+      _queryController.clear();
+      _errorText = null;
+      _statusText = 'Cleared cached presets and signed out locally.';
     });
   }
 
@@ -276,7 +307,15 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Donor Setup')),
+      appBar: AppBar(
+        title: const Text('Donor Setup'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: _clearCachedPresetsAndSignOut,
+            child: const Text('Clear cache / Sign out'),
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -286,6 +325,14 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
               onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(
                 labelText: 'Type app, restaurant, menu hint',
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _manualAreaController,
+              decoration: const InputDecoration(
+                labelText: 'Manual area',
+                hintText: 'Enter city/area (e.g. Chennai)',
               ),
             ),
             const SizedBox(height: 12),
