@@ -177,13 +177,11 @@ void main() {
     );
   });
 
-  test('client sends Bearer demo.<user_id> and X-User-Id headers', () async {
+  test('client sends Bearer signed-token header', () async {
     final List<String> sawAuthorization = <String>[];
-    final List<String> sawXUserId = <String>[];
     final server = _ScriptedServer((HttpRequest request) async {
       sawAuthorization
           .add(request.headers.value('authorization') ?? '<missing>');
-      sawXUserId.add(request.headers.value('x-user-id') ?? '<missing>');
       request.response
         ..statusCode = 200
         ..headers.contentType = ContentType.json
@@ -200,7 +198,7 @@ void main() {
 
     final client = HttpDonorSetupApiClient(
       baseUrl: baseUrl,
-      authContext: const AuthContext(userId: 'alice'),
+      authContext: const AuthContext(userId: 'alice', authToken: 'jwt-alice'),
       retryPolicy: const RetryPolicy(maxAttempts: 1),
     );
 
@@ -211,8 +209,7 @@ void main() {
       manualArea: 'Chennai',
     );
 
-    expect(sawAuthorization.single, 'Bearer demo.alice');
-    expect(sawXUserId.single, 'alice');
+    expect(sawAuthorization.single, 'Bearer jwt-alice');
   });
 
   test('savePresets does not retry on 5xx (mutating policy)', () async {

@@ -1,16 +1,12 @@
-/// Minimal auth context for MVP.
+/// Auth context for MVP signed-token flow.
 ///
-/// Until sharebridge-user-service ships real auth, the mobile app carries a
-/// non-cryptographic placeholder identity. The integration-service accepts
-/// this in two header forms:
+/// `authToken` is expected from `--dart-define=AUTH_TOKEN=...`, issued by
+/// sharebridge-user-service (`POST /v1/auth/token`).
 ///
-///   Authorization: Bearer demo.<user_id>
-///   X-User-Id: <user_id>
-///
-/// `userId` is sourced from `--dart-define=USER_ID=...` at build time, with
-/// a `'demo-user'` fallback so local dev keeps working.
+/// `userId` remains sourced from `--dart-define=USER_ID=...` for request
+/// payload fields and local display/state.
 class AuthContext {
-  const AuthContext({required this.userId});
+  const AuthContext({required this.userId, required this.authToken});
 
   /// Builds the AuthContext from compile-time defines. The default keeps
   /// existing local-dev behavior backward compatible.
@@ -19,19 +15,21 @@ class AuthContext {
       'USER_ID',
       defaultValue: 'demo-user',
     );
-    return const AuthContext(userId: userId);
+    const authToken = String.fromEnvironment('AUTH_TOKEN', defaultValue: '');
+    return const AuthContext(userId: userId, authToken: authToken);
   }
 
   final String userId;
+  final String authToken;
 
-  /// MVP placeholder token. Not cryptographically signed; the
-  /// integration-service trusts it for local dev only.
-  String get bearerToken => 'demo.$userId';
+  String get bearerToken => authToken.trim();
 
   Map<String, String> toHeaders() {
+    if (bearerToken.isEmpty) {
+      return const <String, String>{};
+    }
     return <String, String>{
       'authorization': 'Bearer $bearerToken',
-      'x-user-id': userId,
     };
   }
 }
