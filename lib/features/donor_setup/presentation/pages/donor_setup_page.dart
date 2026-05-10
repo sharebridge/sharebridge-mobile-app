@@ -12,6 +12,7 @@ import '../../data/donor_setup_repository_impl.dart';
 import '../../data/http_donor_setup_api_client.dart';
 import '../../domain/models/donor_preset.dart';
 import '../../domain/models/vendor_suggestion.dart';
+import 'donor_presets_page.dart';
 
 class DonorSetupPage extends StatefulWidget {
   const DonorSetupPage({
@@ -310,6 +311,23 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       appBar: AppBar(
         title: const Text('Donor Setup'),
         actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.restaurant_menu),
+            tooltip: 'Saved presets',
+            onPressed: () async {
+              await Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (BuildContext context) => DonorPresetsPage(
+                    loadPresetsUseCase: _loadPresetsUseCase,
+                    authContext: _authContext,
+                  ),
+                ),
+              );
+              if (mounted) {
+                await _loadInitialPresets();
+              }
+            },
+          ),
           TextButton(
             onPressed: _clearCachedPresetsAndSignOut,
             child: const Text('Clear cache / Sign out'),
