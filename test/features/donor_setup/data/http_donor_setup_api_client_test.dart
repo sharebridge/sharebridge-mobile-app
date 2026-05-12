@@ -276,4 +276,44 @@ void main() {
     expect(seenMethod, 'DELETE');
     expect(server.requestCount, 1);
   });
+
+  test('removePreset sends POST delete-item with JSON body', () async {
+    String? seenMethod;
+    String? seenBody;
+    final server = _ScriptedServer((HttpRequest request) async {
+      seenMethod = request.method;
+      seenBody = await utf8.decoder.bind(request).join();
+      request.response
+        ..statusCode = 200
+        ..headers.contentType = ContentType.json
+        ..write(
+          jsonEncode(<String, dynamic>{
+            'user_id': 'alice',
+            'presets': <dynamic>[],
+          }),
+        );
+      await request.response.close();
+    });
+    final baseUrl = await server.start();
+    addTearDown(server.stop);
+
+    final client = HttpDonorSetupApiClient(
+      baseUrl: baseUrl,
+      retryPolicy: const RetryPolicy(maxAttempts: 1),
+      savePresetsRetryPolicy: const RetryPolicy(maxAttempts: 1),
+    );
+
+    await client.removePreset(
+      userId: 'alice',
+      restaurantName: 'A2B',
+      orderUrl: 'https://example.com/o',
+    );
+
+    expect(seenMethod, 'POST');
+    expect(server.requestCount, 1);
+    final decoded = jsonDecode(seenBody!) as Map<String, dynamic>;
+    expect(decoded['user_id'], 'alice');
+    expect(decoded['restaurant_name'], 'A2B');
+    expect(decoded['order_url'], 'https://example.com/o');
+  });
 }

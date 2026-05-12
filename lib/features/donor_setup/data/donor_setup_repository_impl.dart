@@ -71,4 +71,16 @@ class DonorSetupRepositoryImpl implements DonorSetupRepository {
   Future<void> clearPresets({required String userId}) {
     return _apiClient.clearPresets(userId: userId);
   }
+
+  @override
+  Future<void> removePreset({
+    required String userId,
+    required DonorPreset preset,
+  }) {
+    return _apiClient.removePreset(
+      userId: userId,
+      restaurantName: preset.restaurantName,
+      orderUrl: preset.orderUrl,
+    );
+  }
 }

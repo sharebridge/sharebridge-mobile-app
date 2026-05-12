@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../application/clear_presets_usecase.dart';
 import '../../application/confirm_presets_usecase.dart';
 import '../../application/load_presets_usecase.dart';
+import '../../application/remove_preset_usecase.dart';
 import '../../application/suggest_vendors_usecase.dart';
 import '../../data/auth_context.dart';
 import '../../data/donor_setup_api_exceptions.dart';
@@ -21,12 +23,16 @@ class DonorSetupPage extends StatefulWidget {
     this.suggestVendorsUseCase,
     this.confirmPresetsUseCase,
     this.loadPresetsUseCase,
+    this.clearPresetsUseCase,
+    this.removePresetUseCase,
     this.authContext,
   });
 
   final SuggestVendorsUseCase? suggestVendorsUseCase;
   final ConfirmPresetsUseCase? confirmPresetsUseCase;
   final LoadPresetsUseCase? loadPresetsUseCase;
+  final ClearPresetsUseCase? clearPresetsUseCase;
+  final RemovePresetUseCase? removePresetUseCase;
   final AuthContext? authContext;
 
   @override
@@ -52,6 +58,9 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   String? _errorText;
   String? _statusText;
   final Set<int> _selected = <int>{};
+  /// When true, [_suggestions] came from [Suggest Vendors], not from server/cache.
+  /// Returning from Saved presets must not replace this list with [loadPresets] only.
+  bool _suggestionsFromSearch = false;
 
   @override
   void initState() {
@@ -104,6 +113,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       _selected.clear();
       _errorText = null;
       _statusText = null;
+      _suggestionsFromSearch = false;
     });
 
     try {
@@ -115,10 +125,12 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
 
       setState(() {
         _suggestions.addAll(results);
+        _suggestionsFromSearch = true;
       });
     } catch (error) {
       setState(() {
         _errorText = 'Unable to fetch suggestions. ${_friendlyError(error)}';
+        _suggestionsFromSearch = false;
       });
     } finally {
       setState(() {
@@ -218,6 +230,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
                 .toList(),
           );
         _selected.clear();
+        _suggestionsFromSearch = false;
         _statusText = presets.isNotEmpty
             ? 'Loaded saved presets from server.'
             : 'No saved presets on server yet.';
@@ -237,19 +250,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   }
 
   Future<void> _cachePresets(List<DonorPreset> presets) async {
-    final prefs = await SharedPreferences.getInstance();
-    final payload = presets
-        .map(
-          (preset) => <String, dynamic>{
-            'restaurant_name': preset.restaurantName,
-            'order_url': preset.orderUrl,
-            'menu_items': preset.menuItems,
-            'app_name': preset.appName,
-            'confidence': preset.confidence,
-          },
-        )
-        .toList();
-    await prefs.setString(kDonorSetupPresetsCacheKey, jsonEncode(payload));
+    await syncDonorSetupPresetsCache(presets);
   }
 
   Future<bool> _loadCachedPresets() async {
@@ -286,6 +287,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
         ..clear()
         ..addAll(suggestions);
       _selected.clear();
+      _suggestionsFromSearch = false;
       _statusText = 'Using cached presets (offline fallback).';
     });
     return true;
@@ -300,6 +302,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     setState(() {
       _suggestions.clear();
       _selected.clear();
+      _suggestionsFromSearch = false;
       _queryController.clear();
       _errorText = null;
       _statusText = 'Cleared cached presets and signed out locally.';
@@ -333,11 +336,13 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
                 MaterialPageRoute<void>(
                   builder: (BuildContext context) => DonorPresetsPage(
                     loadPresetsUseCase: _loadPresetsUseCase,
+                    clearPresetsUseCase: widget.clearPresetsUseCase,
+                    removePresetUseCase: widget.removePresetUseCase,
                     authContext: _authContext,
                   ),
                 ),
               );
-              if (mounted) {
+              if (mounted && !_suggestionsFromSearch) {
                 await _loadInitialPresets();
               }
             },

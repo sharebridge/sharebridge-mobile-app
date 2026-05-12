@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sharebridge_mobile_app/features/donor_setup/application/clear_presets_usecase.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/application/confirm_presets_usecase.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/application/load_presets_usecase.dart';
+import 'package:sharebridge_mobile_app/features/donor_setup/application/remove_preset_usecase.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/application/suggest_vendors_usecase.dart';
+import 'package:sharebridge_mobile_app/features/donor_setup/data/auth_context.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/data/donor_setup_api_exceptions.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/data/donor_setup_local_storage.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/domain/models/donor_preset.dart';
@@ -42,6 +45,20 @@ class _FakeRepository implements DonorSetupRepository {
   }
 
   @override
+  Future<void> removePreset({
+    required String userId,
+    required DonorPreset preset,
+  }) async {
+    loadResult = loadResult
+        .where(
+          (DonorPreset p) =>
+              p.restaurantName != preset.restaurantName ||
+              p.orderUrl != preset.orderUrl,
+        )
+        .toList();
+  }
+
+  @override
   Future<List<VendorSuggestion>> suggestVendors({
     required String queryText,
     required double? lat,
@@ -60,9 +77,74 @@ class _FakeRepository implements DonorSetupRepository {
   }
 }
 
+/// Returns two suggestions so we can assert the full list survives a presets detour.
+class _FakeRepositoryTwoSuggestions extends _FakeRepository {
+  @override
+  Future<List<VendorSuggestion>> suggestVendors({
+    required String queryText,
+    required double? lat,
+    required double? lng,
+    String? manualArea,
+  }) async {
+    return <VendorSuggestion>[
+      VendorSuggestion(
+        restaurantName: 'Bistro One',
+        menuItems: const <String>['Meals'],
+        orderUrl: 'https://example.com/one',
+        appName: 'Zomato',
+        confidence: 0.9,
+      ),
+      VendorSuggestion(
+        restaurantName: 'Bistro Two',
+        menuItems: const <String>['Combo'],
+        orderUrl: 'https://example.com/two',
+        appName: 'Swiggy',
+        confidence: 0.85,
+      ),
+    ];
+  }
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  testWidgets('returning from saved presets keeps search suggestions list', (
+    WidgetTester tester,
+  ) async {
+    final repo = _FakeRepositoryTwoSuggestions();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DonorSetupPage(
+          suggestVendorsUseCase: SuggestVendorsUseCase(repo),
+          loadPresetsUseCase: LoadPresetsUseCase(repo),
+          clearPresetsUseCase: ClearPresetsUseCase(repo),
+          removePresetUseCase: RemovePresetUseCase(repo),
+          authContext: const AuthContext(userId: 'u1', authToken: 't'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, 'lunch');
+    await tester.pump();
+    await tester.tap(find.text('Suggest Vendors'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bistro One'), findsOneWidget);
+    expect(find.text('Bistro Two'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Saved presets'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Saved presets'), findsOneWidget);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bistro One'), findsOneWidget);
+    expect(find.text('Bistro Two'), findsOneWidget);
   });
 
   testWidgets('search flow renders suggestions and confirm button exists', (

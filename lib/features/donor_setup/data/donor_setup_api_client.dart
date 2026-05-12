@@ -15,4 +15,11 @@ abstract class DonorSetupApiClient {
 
   /// Removes all saved presets for [userId] on the integration-service backend.
   Future<void> clearPresets({required String userId});
+
+  /// Removes one preset identified by [restaurantName] and [orderUrl].
+  Future<void> removePreset({
+    required String userId,
+    required String restaurantName,
+    required String orderUrl,
+  });
 }

@@ -138,6 +138,30 @@ class HttpDonorSetupApiClient implements DonorSetupApiClient {
     );
   }
 
+  @override
+  Future<void> removePreset({
+    required String userId,
+    required String restaurantName,
+    required String orderUrl,
+  }) {
+    return _runWithRetry<void>(
+      policy: savePresetsRetryPolicy,
+      operation: () async {
+        await _sendJson(
+          method: 'POST',
+          uri: Uri.parse(
+            '$baseUrl/v1/donor-setup/preferences/delete-item',
+          ),
+          body: <String, dynamic>{
+            'user_id': userId,
+            'restaurant_name': restaurantName,
+            'order_url': orderUrl,
+          },
+        );
+      },
+    );
+  }
+
   /// Executes a single HTTP call and maps low-level errors to typed
   /// [DonorSetupApiException]s. Does NOT retry; that's [_runWithRetry]'s job.
   Future<Map<String, dynamic>> _sendJson({

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/clear_presets_usecase.dart';
 import '../../application/load_presets_usecase.dart';
+import '../../application/remove_preset_usecase.dart';
 import '../../data/auth_context.dart';
 import '../../data/donor_setup_api_exceptions.dart';
 import '../../data/donor_setup_local_storage.dart';
@@ -17,11 +17,13 @@ class DonorPresetsPage extends StatefulWidget {
     super.key,
     this.loadPresetsUseCase,
     this.clearPresetsUseCase,
+    this.removePresetUseCase,
     this.authContext,
   });
 
   final LoadPresetsUseCase? loadPresetsUseCase;
   final ClearPresetsUseCase? clearPresetsUseCase;
+  final RemovePresetUseCase? removePresetUseCase;
   final AuthContext? authContext;
 
   @override
@@ -37,6 +39,7 @@ class _DonorPresetsPageState extends State<DonorPresetsPage> {
   late final AuthContext _authContext;
   late final LoadPresetsUseCase _loadPresetsUseCase;
   late final ClearPresetsUseCase _clearPresetsUseCase;
+  late final RemovePresetUseCase _removePresetUseCase;
   List<DonorPreset> _presets = <DonorPreset>[];
   bool _loading = true;
   String? _errorText;
@@ -47,7 +50,8 @@ class _DonorPresetsPageState extends State<DonorPresetsPage> {
     _authContext = widget.authContext ?? AuthContext.fromEnvironment();
     DonorSetupRepositoryImpl? httpRepository;
     if (widget.loadPresetsUseCase == null ||
-        widget.clearPresetsUseCase == null) {
+        widget.clearPresetsUseCase == null ||
+        widget.removePresetUseCase == null) {
       httpRepository = DonorSetupRepositoryImpl(
         HttpDonorSetupApiClient(
           baseUrl: _defaultApiBaseUrl,
@@ -59,6 +63,8 @@ class _DonorPresetsPageState extends State<DonorPresetsPage> {
         LoadPresetsUseCase(httpRepository!);
     _clearPresetsUseCase = widget.clearPresetsUseCase ??
         ClearPresetsUseCase(httpRepository!);
+    _removePresetUseCase = widget.removePresetUseCase ??
+        RemovePresetUseCase(httpRepository!);
     _refresh();
   }
 
@@ -200,8 +206,7 @@ class _DonorPresetsPageState extends State<DonorPresetsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('All presets cleared.')),
       );
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(kDonorSetupPresetsCacheKey);
+      await syncDonorSetupPresetsCache(<DonorPreset>[]);
     } catch (error) {
       if (!mounted) {
         return;
@@ -210,6 +215,68 @@ class _DonorPresetsPageState extends State<DonorPresetsPage> {
         _errorText = _friendlyError(error);
         _presets = <DonorPreset>[];
         _loading = false;
+      });
+    }
+  }
+
+  Future<void> _confirmAndRemove(DonorPreset preset) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Remove "${preset.restaurantName}"?'),
+          content: const Text(
+            'This removes this preset from your account on the server and updates the offline cache.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const Key('confirm_remove_preset'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Remove'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    try {
+      await _removePresetUseCase(
+        userId: _authContext.userId,
+        preset: preset,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _presets = _presets
+            .where(
+              (DonorPreset p) =>
+                  p.restaurantName != preset.restaurantName ||
+                  p.orderUrl != preset.orderUrl,
+            )
+            .toList();
+        _errorText = null;
+        _loading = false;
+      });
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Removed ${preset.restaurantName}.')),
+      );
+      await syncDonorSetupPresetsCache(_presets);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorText = _friendlyError(error);
       });
     }
   }
@@ -326,6 +393,11 @@ class _DonorPresetsPageState extends State<DonorPresetsPage> {
                                       : () => _openLink(preset),
                                   icon: const Icon(Icons.open_in_new, size: 18),
                                   label: const Text('Open link'),
+                                ),
+                                TextButton(
+                                  onPressed:
+                                      _loading ? null : () => _confirmAndRemove(preset),
+                                  child: const Text('Remove'),
                                 ),
                               ],
                             ),

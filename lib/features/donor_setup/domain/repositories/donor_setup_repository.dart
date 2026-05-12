@@ -17,4 +17,9 @@ abstract class DonorSetupRepository {
   });
 
   Future<void> clearPresets({required String userId});
+
+  Future<void> removePreset({
+    required String userId,
+    required DonorPreset preset,
+  });
 }

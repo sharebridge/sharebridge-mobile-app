@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/application/clear_presets_usecase.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/application/load_presets_usecase.dart';
+import 'package:sharebridge_mobile_app/features/donor_setup/application/remove_preset_usecase.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/data/auth_context.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/data/donor_setup_api_exceptions.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/domain/models/donor_preset.dart';
@@ -19,6 +20,7 @@ class _FakePresetsRepo implements DonorSetupRepository {
   final List<DonorPreset> _presets;
   final bool throwOnLoad;
   int clearInvocations = 0;
+  int removeInvocations = 0;
 
   @override
   Future<List<DonorPreset>> loadPresets({required String userId}) async {
@@ -38,6 +40,19 @@ class _FakePresetsRepo implements DonorSetupRepository {
   Future<void> clearPresets({required String userId}) async {
     clearInvocations += 1;
     _presets.clear();
+  }
+
+  @override
+  Future<void> removePreset({
+    required String userId,
+    required DonorPreset preset,
+  }) async {
+    removeInvocations += 1;
+    _presets.removeWhere(
+      (DonorPreset p) =>
+          p.restaurantName == preset.restaurantName &&
+          p.orderUrl == preset.orderUrl,
+    );
   }
 
   @override
@@ -73,6 +88,7 @@ void main() {
         home: DonorPresetsPage(
           loadPresetsUseCase: LoadPresetsUseCase(repo),
           clearPresetsUseCase: ClearPresetsUseCase(repo),
+          removePresetUseCase: RemovePresetUseCase(repo),
           authContext: auth,
         ),
       ),
@@ -83,6 +99,7 @@ void main() {
     expect(find.textContaining('vendor.example'), findsOneWidget);
     expect(find.text('Copy link'), findsOneWidget);
     expect(find.text('Open link'), findsOneWidget);
+    expect(find.text('Remove'), findsOneWidget);
   });
 
   testWidgets('shows friendly error when load fails', (WidgetTester tester) async {
@@ -94,6 +111,7 @@ void main() {
         home: DonorPresetsPage(
           loadPresetsUseCase: LoadPresetsUseCase(repo),
           clearPresetsUseCase: ClearPresetsUseCase(repo),
+          removePresetUseCase: RemovePresetUseCase(repo),
           authContext: auth,
         ),
       ),
@@ -124,6 +142,7 @@ void main() {
         home: DonorPresetsPage(
           loadPresetsUseCase: LoadPresetsUseCase(repo),
           clearPresetsUseCase: ClearPresetsUseCase(repo),
+          removePresetUseCase: RemovePresetUseCase(repo),
           authContext: auth,
         ),
       ),
@@ -150,5 +169,63 @@ void main() {
     expect(find.text('Test Bistro'), findsNothing);
     expect(find.text('No presets on server for this user.'), findsOneWidget);
     expect(find.textContaining('All presets cleared.'), findsOneWidget);
+  });
+
+  testWidgets('Remove confirms and drops one preset', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final repo = _FakePresetsRepo(
+      initial: <DonorPreset>[
+        DonorPreset(
+          restaurantName: 'Test Bistro',
+          orderUrl: 'https://vendor.example/order/1',
+          menuItems: const <String>['Meals'],
+          appName: 'Swiggy',
+          source: 'ai_suggestion',
+          confidence: 0.85,
+        ),
+        DonorPreset(
+          restaurantName: 'Other Place',
+          orderUrl: 'https://vendor.example/order/2',
+          menuItems: const <String>['Combo'],
+          appName: 'Zomato',
+          source: 'ai_suggestion',
+          confidence: 0.9,
+        ),
+      ],
+    );
+    const auth = AuthContext(userId: 'u1', authToken: 't');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DonorPresetsPage(
+          loadPresetsUseCase: LoadPresetsUseCase(repo),
+          clearPresetsUseCase: ClearPresetsUseCase(repo),
+          removePresetUseCase: RemovePresetUseCase(repo),
+          authContext: auth,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Test Bistro'), findsOneWidget);
+    expect(find.text('Other Place'), findsOneWidget);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(Card).first,
+        matching: find.text('Remove'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    await tester.tap(find.byKey(const Key('confirm_remove_preset')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(repo.removeInvocations, 1);
+    expect(find.text('Test Bistro'), findsNothing);
+    expect(find.text('Other Place'), findsOneWidget);
+    expect(find.textContaining('Removed Test Bistro.'), findsOneWidget);
   });
 }
