@@ -62,6 +62,10 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   /// Returning from Saved presets must not replace this list with [loadPresets] only.
   bool _suggestionsFromSearch = false;
 
+  /// Bumps when a new preset-load or search starts so slower [_loadInitialPresets]
+  /// completions cannot overwrite a newer search result (common after time on Saved presets).
+  int _presetsLoadGeneration = 0;
+
   @override
   void initState() {
     super.initState();
@@ -99,6 +103,75 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     _loadInitialPresets();
   }
 
+  /// Reloads saved presets into [_suggestions]. When [force] is false, a completion is
+  /// ignored if the user already ran [Suggest Vendors] ([_suggestionsFromSearch]) or if
+  /// a newer load/search superseded this call ([_presetsLoadGeneration]).
+  Future<void> _loadInitialPresets({bool force = false}) async {
+    final generation = ++_presetsLoadGeneration;
+    try {
+      final presets = await _loadPresetsUseCase(userId: _authContext.userId);
+      if (!mounted) {
+        return;
+      }
+      if (generation != _presetsLoadGeneration) {
+        return;
+      }
+      if (_suggestionsFromSearch && !force) {
+        return;
+      }
+      setState(() {
+        _suggestions
+          ..clear()
+          ..addAll(
+            presets
+                .map(
+                  (preset) => VendorSuggestion(
+                    restaurantName: preset.restaurantName,
+                    menuItems: preset.menuItems,
+                    orderUrl: preset.orderUrl,
+                    appName: preset.appName,
+                    confidence: preset.confidence,
+                  ),
+                )
+                .toList(),
+          );
+        _selected.clear();
+        _suggestionsFromSearch = false;
+        _statusText = presets.isNotEmpty
+            ? 'Loaded saved presets from server.'
+            : 'No saved presets on server yet.';
+      });
+      return;
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      if (generation != _presetsLoadGeneration) {
+        return;
+      }
+      if (_suggestionsFromSearch && !force) {
+        return;
+      }
+      final usedCache = await _loadCachedPresets(forGeneration: generation);
+      if (usedCache) {
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
+      if (generation != _presetsLoadGeneration) {
+        return;
+      }
+      if (_suggestionsFromSearch && !force) {
+        return;
+      }
+      setState(() {
+        _statusText =
+            'Server unreachable while loading presets. ${_friendlyError(error)}';
+      });
+    }
+  }
+
   @override
   void dispose() {
     _queryController.dispose();
@@ -108,6 +181,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
 
   Future<void> _search() async {
     setState(() {
+      _presetsLoadGeneration++;
       _loading = true;
       _suggestions.clear();
       _selected.clear();
@@ -170,7 +244,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       await _cachePresets(presets);
       // Replace list with server truth so the UI matches what was saved (not the
       // full mock search result with stale checkboxes).
-      await _loadInitialPresets();
+      await _loadInitialPresets(force: true);
       if (!mounted) {
         return;
       }
@@ -207,53 +281,11 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     return error.toString();
   }
 
-  Future<void> _loadInitialPresets() async {
-    try {
-      final presets = await _loadPresetsUseCase(userId: _authContext.userId);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _suggestions
-          ..clear()
-          ..addAll(
-            presets
-                .map(
-                  (preset) => VendorSuggestion(
-                    restaurantName: preset.restaurantName,
-                    menuItems: preset.menuItems,
-                    orderUrl: preset.orderUrl,
-                    appName: preset.appName,
-                    confidence: preset.confidence,
-                  ),
-                )
-                .toList(),
-          );
-        _selected.clear();
-        _suggestionsFromSearch = false;
-        _statusText = presets.isNotEmpty
-            ? 'Loaded saved presets from server.'
-            : 'No saved presets on server yet.';
-      });
-      return;
-    } catch (error) {
-      // Fallback to local cache only when server load fails.
-      final usedCache = await _loadCachedPresets();
-      if (usedCache) {
-        return;
-      }
-      setState(() {
-        _statusText =
-            'Server unreachable while loading presets. ${_friendlyError(error)}';
-      });
-    }
-  }
-
   Future<void> _cachePresets(List<DonorPreset> presets) async {
     await syncDonorSetupPresetsCache(presets);
   }
 
-  Future<bool> _loadCachedPresets() async {
+  Future<bool> _loadCachedPresets({required int forGeneration}) async {
     final prefs = await SharedPreferences.getInstance();
     final cached = prefs.getString(kDonorSetupPresetsCacheKey);
     if (cached == null || cached.isEmpty) {
@@ -280,6 +312,12 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
         .where((item) => item.restaurantName.isNotEmpty)
         .toList();
     if (suggestions.isEmpty) {
+      return false;
+    }
+    if (!mounted || forGeneration != _presetsLoadGeneration) {
+      return false;
+    }
+    if (_suggestionsFromSearch) {
       return false;
     }
     setState(() {

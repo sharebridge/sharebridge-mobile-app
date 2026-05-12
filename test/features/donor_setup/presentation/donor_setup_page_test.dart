@@ -77,6 +77,20 @@ class _FakeRepository implements DonorSetupRepository {
   }
 }
 
+/// First [loadPresets] is delayed so tests can reproduce a race with [Suggest Vendors].
+class _DelaysFirstLoadRepo extends _FakeRepository {
+  int _loadCalls = 0;
+
+  @override
+  Future<List<DonorPreset>> loadPresets({required String userId}) async {
+    _loadCalls++;
+    if (_loadCalls == 1) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    return super.loadPresets(userId: userId);
+  }
+}
+
 /// Returns two suggestions so we can assert the full list survives a presets detour.
 class _FakeRepositoryTwoSuggestions extends _FakeRepository {
   @override
@@ -108,6 +122,33 @@ class _FakeRepositoryTwoSuggestions extends _FakeRepository {
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  testWidgets('slow initial load does not overwrite search results', (
+    WidgetTester tester,
+  ) async {
+    final repo = _DelaysFirstLoadRepo();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DonorSetupPage(
+          suggestVendorsUseCase: SuggestVendorsUseCase(repo),
+          loadPresetsUseCase: LoadPresetsUseCase(repo),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField).first, 'lunch');
+    await tester.pump();
+    await tester.tap(find.text('Suggest Vendors'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('A2B'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('A2B'), findsOneWidget);
   });
 
   testWidgets('returning from saved presets keeps search suggestions list', (
