@@ -299,10 +299,17 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     });
   }
 
-  String _suggestionTitle(VendorSuggestion suggestion) {
-    final firstMenu =
-        suggestion.menuItems.isNotEmpty ? suggestion.menuItems.first : 'Menu';
-    return '${suggestion.restaurantName} - $firstMenu';
+  /// One line per suggestion: restaurant as title; full menu list + app in subtitle
+  /// (the integration-service mock returns fixed suggestions regardless of query).
+  Widget _suggestionTileSubtitle(VendorSuggestion suggestion) {
+    final menus = suggestion.menuItems.isEmpty
+        ? 'Menu TBD'
+        : suggestion.menuItems.join(', ');
+    return Text(
+      '$menus · ${suggestion.appName}',
+      maxLines: 4,
+      overflow: TextOverflow.ellipsis,
+    );
   }
 
   @override
@@ -382,8 +389,9 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
                 itemBuilder: (BuildContext context, int index) {
                   final selected = _selected.contains(index);
                   return CheckboxListTile(
-                    title: Text(_suggestionTitle(_suggestions[index])),
-                    subtitle: Text(_suggestions[index].appName),
+                    isThreeLine: true,
+                    title: Text(_suggestions[index].restaurantName),
+                    subtitle: _suggestionTileSubtitle(_suggestions[index]),
                     value: selected,
                     onChanged: (_) {
                       setState(() {

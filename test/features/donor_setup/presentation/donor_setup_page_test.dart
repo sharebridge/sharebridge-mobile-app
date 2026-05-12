@@ -68,7 +68,8 @@ void main() {
     await tester.tap(find.text('Suggest Vendors'));
     await tester.pumpAndSettle();
 
-    expect(find.text('A2B - Veg Meals'), findsOneWidget);
+    expect(find.text('A2B'), findsOneWidget);
+    expect(find.textContaining('Veg Meals'), findsOneWidget);
     expect(find.text('Confirm and Save Presets'), findsOneWidget);
   });
 
@@ -130,12 +131,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Cached Cafe - Meals'), findsOneWidget);
+    expect(find.text('Cached Cafe'), findsOneWidget);
+    expect(find.textContaining('Meals'), findsOneWidget);
 
     await tester.tap(find.text('Clear cache / Sign out'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Cached Cafe - Meals'), findsNothing);
+    expect(find.text('Cached Cafe'), findsNothing);
     expect(
       find.text('Cleared cached presets and signed out locally.'),
       findsOneWidget,
