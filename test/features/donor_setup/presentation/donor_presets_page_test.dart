@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sharebridge_mobile_app/features/donor_setup/application/clear_presets_usecase.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/application/load_presets_usecase.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/data/auth_context.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/data/donor_setup_api_exceptions.dart';
@@ -9,17 +10,21 @@ import 'package:sharebridge_mobile_app/features/donor_setup/domain/repositories/
 import 'package:sharebridge_mobile_app/features/donor_setup/presentation/pages/donor_presets_page.dart';
 
 class _FakePresetsRepo implements DonorSetupRepository {
-  _FakePresetsRepo({this.presets = const <DonorPreset>[], this.throwOnLoad = false});
+  _FakePresetsRepo({
+    List<DonorPreset> initial = const <DonorPreset>[],
+    this.throwOnLoad = false,
+  }) : _presets = List<DonorPreset>.from(initial);
 
-  final List<DonorPreset> presets;
+  final List<DonorPreset> _presets;
   final bool throwOnLoad;
+  int clearInvocations = 0;
 
   @override
   Future<List<DonorPreset>> loadPresets({required String userId}) async {
     if (throwOnLoad) {
       throw const DonorSetupNetworkException('offline');
     }
-    return presets;
+    return List<DonorPreset>.from(_presets);
   }
 
   @override
@@ -27,6 +32,12 @@ class _FakePresetsRepo implements DonorSetupRepository {
     required String userId,
     required List<DonorPreset> presets,
   }) async {}
+
+  @override
+  Future<void> clearPresets({required String userId}) async {
+    clearInvocations += 1;
+    _presets.clear();
+  }
 
   @override
   Future<List<VendorSuggestion>> suggestVendors({
@@ -43,7 +54,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final repo = _FakePresetsRepo(
-      presets: <DonorPreset>[
+      initial: <DonorPreset>[
         DonorPreset(
           restaurantName: 'Test Bistro',
           orderUrl: 'https://vendor.example/order/1',
@@ -60,6 +71,7 @@ void main() {
       MaterialApp(
         home: DonorPresetsPage(
           loadPresetsUseCase: LoadPresetsUseCase(repo),
+          clearPresetsUseCase: ClearPresetsUseCase(repo),
           authContext: auth,
         ),
       ),
@@ -80,6 +92,7 @@ void main() {
       MaterialApp(
         home: DonorPresetsPage(
           loadPresetsUseCase: LoadPresetsUseCase(repo),
+          clearPresetsUseCase: ClearPresetsUseCase(repo),
           authContext: auth,
         ),
       ),
@@ -87,5 +100,47 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Network unavailable'), findsOneWidget);
+  });
+
+  testWidgets('Clear all confirms and empties list', (WidgetTester tester) async {
+    final repo = _FakePresetsRepo(
+      initial: <DonorPreset>[
+        DonorPreset(
+          restaurantName: 'Test Bistro',
+          orderUrl: 'https://vendor.example/order/1',
+          menuItems: const <String>['Meals'],
+          appName: 'Swiggy',
+          source: 'ai_suggestion',
+          confidence: 0.85,
+        ),
+      ],
+    );
+    const auth = AuthContext(userId: 'u1', authToken: 't');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DonorPresetsPage(
+          loadPresetsUseCase: LoadPresetsUseCase(repo),
+          clearPresetsUseCase: ClearPresetsUseCase(repo),
+          authContext: auth,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Test Bistro'), findsOneWidget);
+
+    await tester.tap(find.text('Clear all'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('confirm_clear_all_presets')));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(repo.clearInvocations, 1);
+    expect(find.byKey(const ValueKey<int>(0)), findsOneWidget);
+    expect(find.text('Test Bistro'), findsNothing);
+    expect(find.text('No presets on server for this user.'), findsOneWidget);
+    expect(find.textContaining('All presets cleared.'), findsOneWidget);
   });
 }

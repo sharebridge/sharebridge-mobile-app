@@ -17,6 +17,9 @@ class _FakeRepository implements DonorSetupRepository {
   }) async {}
 
   @override
+  Future<void> clearPresets({required String userId}) async {}
+
+  @override
   Future<List<VendorSuggestion>> suggestVendors({
     required String queryText,
     required double? lat,

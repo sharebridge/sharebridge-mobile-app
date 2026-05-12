@@ -9,6 +9,7 @@ import '../../application/suggest_vendors_usecase.dart';
 import '../../data/auth_context.dart';
 import '../../data/donor_setup_api_exceptions.dart';
 import '../../data/donor_setup_repository_impl.dart';
+import '../../data/donor_setup_local_storage.dart';
 import '../../data/http_donor_setup_api_client.dart';
 import '../../domain/models/donor_preset.dart';
 import '../../domain/models/vendor_suggestion.dart';
@@ -37,7 +38,6 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     'API_BASE_URL',
     defaultValue: 'http://localhost:8080',
   );
-  static const String _cacheKey = 'donor_setup_presets_cache';
   final TextEditingController _queryController = TextEditingController();
   final TextEditingController _manualAreaController = TextEditingController(
     text: 'Chennai',
@@ -249,12 +249,12 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
           },
         )
         .toList();
-    await prefs.setString(_cacheKey, jsonEncode(payload));
+    await prefs.setString(kDonorSetupPresetsCacheKey, jsonEncode(payload));
   }
 
   Future<bool> _loadCachedPresets() async {
     final prefs = await SharedPreferences.getInstance();
-    final cached = prefs.getString(_cacheKey);
+    final cached = prefs.getString(kDonorSetupPresetsCacheKey);
     if (cached == null || cached.isEmpty) {
       return false;
     }
@@ -293,7 +293,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
 
   Future<void> _clearCachedPresetsAndSignOut() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_cacheKey);
+    await prefs.remove(kDonorSetupPresetsCacheKey);
     if (!mounted) {
       return;
     }

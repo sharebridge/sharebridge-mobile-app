@@ -123,6 +123,21 @@ class HttpDonorSetupApiClient implements DonorSetupApiClient {
     );
   }
 
+  @override
+  Future<void> clearPresets({required String userId}) {
+    return _runWithRetry<void>(
+      policy: savePresetsRetryPolicy,
+      operation: () async {
+        await _sendJson(
+          method: 'DELETE',
+          uri: Uri.parse(
+            '$baseUrl/v1/donor-setup/preferences?user_id=${Uri.encodeQueryComponent(userId)}',
+          ),
+        );
+      },
+    );
+  }
+
   /// Executes a single HTTP call and maps low-level errors to typed
   /// [DonorSetupApiException]s. Does NOT retry; that's [_runWithRetry]'s job.
   Future<Map<String, dynamic>> _sendJson({
@@ -132,9 +147,20 @@ class HttpDonorSetupApiClient implements DonorSetupApiClient {
   }) async {
     HttpClientResponse response;
     try {
-      final request = method == 'GET'
-          ? await _httpClient.getUrl(uri)
-          : await _httpClient.postUrl(uri);
+      final HttpClientRequest request;
+      switch (method) {
+        case 'GET':
+          request = await _httpClient.getUrl(uri);
+          break;
+        case 'POST':
+          request = await _httpClient.postUrl(uri);
+          break;
+        case 'DELETE':
+          request = await _httpClient.deleteUrl(uri);
+          break;
+        default:
+          throw ArgumentError('Unsupported HTTP method: $method');
+      }
       _authContext.toHeaders().forEach((name, value) {
         request.headers.set(name, value);
       });

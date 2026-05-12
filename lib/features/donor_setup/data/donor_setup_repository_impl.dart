@@ -66,4 +66,9 @@ class DonorSetupRepositoryImpl implements DonorSetupRepository {
 
     return _apiClient.savePresets(userId: userId, payload: payload);
   }
+
+  @override
+  Future<void> clearPresets({required String userId}) {
+    return _apiClient.clearPresets(userId: userId);
+  }
 }

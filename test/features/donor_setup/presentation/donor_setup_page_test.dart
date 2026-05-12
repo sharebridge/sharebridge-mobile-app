@@ -5,6 +5,7 @@ import 'package:sharebridge_mobile_app/features/donor_setup/application/confirm_
 import 'package:sharebridge_mobile_app/features/donor_setup/application/load_presets_usecase.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/application/suggest_vendors_usecase.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/data/donor_setup_api_exceptions.dart';
+import 'package:sharebridge_mobile_app/features/donor_setup/data/donor_setup_local_storage.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/domain/models/donor_preset.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/domain/models/vendor_suggestion.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/domain/repositories/donor_setup_repository.dart';
@@ -30,6 +31,14 @@ class _FakeRepository implements DonorSetupRepository {
   }) async {
     saveCalls += 1;
     loadResult = List<DonorPreset>.from(presets);
+  }
+
+  int clearCalls = 0;
+
+  @override
+  Future<void> clearPresets({required String userId}) async {
+    clearCalls += 1;
+    loadResult = <DonorPreset>[];
   }
 
   @override
@@ -125,7 +134,7 @@ void main() {
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues(<String, Object>{
-      'donor_setup_presets_cache':
+      kDonorSetupPresetsCacheKey:
           '[{"restaurant_name":"Cached Cafe","order_url":"https://cached.example","menu_items":["Meals"],"app_name":"Swiggy","confidence":0.8}]',
     });
     final repo = _FakeRepository()..throwOnLoad = true;

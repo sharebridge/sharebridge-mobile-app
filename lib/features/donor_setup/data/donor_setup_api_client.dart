@@ -12,4 +12,7 @@ abstract class DonorSetupApiClient {
     required String userId,
     required List<Map<String, dynamic>> payload,
   });
+
+  /// Removes all saved presets for [userId] on the integration-service backend.
+  Future<void> clearPresets({required String userId});
 }

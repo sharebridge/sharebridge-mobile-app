@@ -245,4 +245,35 @@ void main() {
     );
     expect(server.requestCount, 1);
   });
+
+  test('clearPresets sends DELETE and accepts 200 JSON body', () async {
+    String? seenMethod;
+    final server = _ScriptedServer((HttpRequest request) async {
+      seenMethod = request.method;
+      request.response
+        ..statusCode = 200
+        ..headers.contentType = ContentType.json
+        ..write(
+          jsonEncode(<String, dynamic>{
+            'user_id': 'alice',
+            'presets': <dynamic>[],
+            'cleared': true,
+          }),
+        );
+      await request.response.close();
+    });
+    final baseUrl = await server.start();
+    addTearDown(server.stop);
+
+    final client = HttpDonorSetupApiClient(
+      baseUrl: baseUrl,
+      retryPolicy: const RetryPolicy(maxAttempts: 1),
+      savePresetsRetryPolicy: const RetryPolicy(maxAttempts: 1),
+    );
+
+    await client.clearPresets(userId: 'alice');
+
+    expect(seenMethod, 'DELETE');
+    expect(server.requestCount, 1);
+  });
 }

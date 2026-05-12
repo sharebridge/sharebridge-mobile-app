@@ -21,6 +21,9 @@ class _RecordingRepository implements DonorSetupRepository {
   }
 
   @override
+  Future<void> clearPresets({required String userId}) async {}
+
+  @override
   Future<List<VendorSuggestion>> suggestVendors({
     required String queryText,
     required double? lat,

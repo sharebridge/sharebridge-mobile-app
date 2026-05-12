@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../application/clear_presets_usecase.dart';
 import '../../application/load_presets_usecase.dart';
 import '../../data/auth_context.dart';
 import '../../data/donor_setup_api_exceptions.dart';
+import '../../data/donor_setup_local_storage.dart';
 import '../../data/donor_setup_repository_impl.dart';
 import '../../data/http_donor_setup_api_client.dart';
 import '../../domain/models/donor_preset.dart';
@@ -13,10 +16,12 @@ class DonorPresetsPage extends StatefulWidget {
   const DonorPresetsPage({
     super.key,
     this.loadPresetsUseCase,
+    this.clearPresetsUseCase,
     this.authContext,
   });
 
   final LoadPresetsUseCase? loadPresetsUseCase;
+  final ClearPresetsUseCase? clearPresetsUseCase;
   final AuthContext? authContext;
 
   @override
@@ -31,6 +36,7 @@ class _DonorPresetsPageState extends State<DonorPresetsPage> {
 
   late final AuthContext _authContext;
   late final LoadPresetsUseCase _loadPresetsUseCase;
+  late final ClearPresetsUseCase _clearPresetsUseCase;
   List<DonorPreset> _presets = <DonorPreset>[];
   bool _loading = true;
   String? _errorText;
@@ -39,16 +45,20 @@ class _DonorPresetsPageState extends State<DonorPresetsPage> {
   void initState() {
     super.initState();
     _authContext = widget.authContext ?? AuthContext.fromEnvironment();
-    _loadPresetsUseCase =
-        widget.loadPresetsUseCase ??
-        LoadPresetsUseCase(
-          DonorSetupRepositoryImpl(
-            HttpDonorSetupApiClient(
-              baseUrl: _defaultApiBaseUrl,
-              authContext: _authContext,
-            ),
-          ),
-        );
+    DonorSetupRepositoryImpl? httpRepository;
+    if (widget.loadPresetsUseCase == null ||
+        widget.clearPresetsUseCase == null) {
+      httpRepository = DonorSetupRepositoryImpl(
+        HttpDonorSetupApiClient(
+          baseUrl: _defaultApiBaseUrl,
+          authContext: _authContext,
+        ),
+      );
+    }
+    _loadPresetsUseCase = widget.loadPresetsUseCase ??
+        LoadPresetsUseCase(httpRepository!);
+    _clearPresetsUseCase = widget.clearPresetsUseCase ??
+        ClearPresetsUseCase(httpRepository!);
     _refresh();
   }
 
@@ -148,15 +158,78 @@ class _DonorPresetsPageState extends State<DonorPresetsPage> {
     }
   }
 
+  Future<void> _confirmAndClearAll() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Clear all saved presets?'),
+          content: const Text(
+            'This removes every preset for your account on the server and clears the offline cache on this device.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const Key('confirm_clear_all_presets'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Clear all'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    try {
+      await _clearPresetsUseCase(userId: _authContext.userId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _presets = <DonorPreset>[];
+        _errorText = null;
+        _loading = false;
+      });
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All presets cleared.')),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(kDonorSetupPresetsCacheKey);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorText = _friendlyError(error);
+        _presets = <DonorPreset>[];
+        _loading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Saved presets'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: _loading ? null : _confirmAndClearAll,
+            child: const Text('Clear all'),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: CustomScrollView(
+          key: ValueKey<int>(_presets.length),
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: <Widget>[
             if (_loading)
