@@ -104,10 +104,10 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     _loadInitialPresets();
   }
 
-  /// Reloads saved presets into [_suggestions]. When [force] is false, a completion is
-  /// ignored if the user already ran [Suggest Vendors] ([_suggestionsFromSearch]) or if
-  /// a newer load/search superseded this call ([_presetsLoadGeneration]).
-  Future<void> _loadInitialPresets({bool force = false}) async {
+  /// Reloads saved presets into [_suggestions]. Ignored when [_suggestionsFromSearch]
+  /// is true (search results stay on screen). Also dropped if superseded by
+  /// [_presetsLoadGeneration] (stale in-flight loads).
+  Future<void> _loadInitialPresets() async {
     final generation = ++_presetsLoadGeneration;
     try {
       final presets = await _loadPresetsUseCase(userId: _authContext.userId);
@@ -117,7 +117,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       if (generation != _presetsLoadGeneration) {
         return;
       }
-      if (_suggestionsFromSearch && !force) {
+      if (_suggestionsFromSearch) {
         return;
       }
       setState(() {
@@ -150,7 +150,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       if (generation != _presetsLoadGeneration) {
         return;
       }
-      if (_suggestionsFromSearch && !force) {
+      if (_suggestionsFromSearch) {
         return;
       }
       final usedCache = await _loadCachedPresets(forGeneration: generation);
@@ -163,7 +163,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       if (generation != _presetsLoadGeneration) {
         return;
       }
-      if (_suggestionsFromSearch && !force) {
+      if (_suggestionsFromSearch) {
         return;
       }
       setState(() {
@@ -243,13 +243,13 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
         presets: presets,
       );
       await _cachePresets(presets);
-      // Replace list with server truth so the UI matches what was saved (not the
-      // full mock search result with stale checkboxes).
-      await _loadInitialPresets(force: true);
       if (!mounted) {
         return;
       }
+      // Keep the current suggestion list (including unselected rows); only clear
+      // selection so presets/back navigation do not collapse the list to saved-only.
       setState(() {
+        _selected.clear();
         _statusText = 'Presets saved successfully.';
       });
     } catch (error) {

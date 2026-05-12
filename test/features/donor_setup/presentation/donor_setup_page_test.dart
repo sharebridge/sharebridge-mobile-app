@@ -207,6 +207,42 @@ void main() {
     expect(find.text('Confirm and Save Presets'), findsOneWidget);
   });
 
+  testWidgets('confirm save keeps all suggestions visible when only some selected', (
+    WidgetTester tester,
+  ) async {
+    final repo = _FakeRepositoryTwoSuggestions();
+    final suggestUseCase = SuggestVendorsUseCase(repo);
+    final confirmUseCase = ConfirmPresetsUseCase(repo);
+    final loadUseCase = LoadPresetsUseCase(repo);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DonorSetupPage(
+          suggestVendorsUseCase: suggestUseCase,
+          confirmPresetsUseCase: confirmUseCase,
+          loadPresetsUseCase: loadUseCase,
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).first, 'lunch');
+    await tester.pump();
+    await tester.tap(find.text('Suggest Vendors'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bistro One'), findsOneWidget);
+    expect(find.text('Bistro Two'), findsOneWidget);
+
+    await tester.tap(find.byType(CheckboxListTile).first);
+    await tester.pump();
+    await tester.tap(find.text('Confirm and Save Presets'));
+    await tester.pumpAndSettle();
+
+    expect(repo.saveCalls, 1);
+    expect(find.text('Bistro One'), findsOneWidget);
+    expect(find.text('Bistro Two'), findsOneWidget);
+    expect(find.text('Presets saved successfully.'), findsOneWidget);
+  });
+
   testWidgets('confirm saves selected presets and shows success text', (
     WidgetTester tester,
   ) async {
