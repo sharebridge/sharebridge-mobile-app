@@ -29,6 +29,7 @@ class _FakeRepository implements DonorSetupRepository {
     required List<DonorPreset> presets,
   }) async {
     saveCalls += 1;
+    loadResult = List<DonorPreset>.from(presets);
   }
 
   @override
@@ -79,11 +80,13 @@ void main() {
     final repo = _FakeRepository();
     final suggestUseCase = SuggestVendorsUseCase(repo);
     final confirmUseCase = ConfirmPresetsUseCase(repo);
+    final loadUseCase = LoadPresetsUseCase(repo);
     await tester.pumpWidget(
       MaterialApp(
         home: DonorSetupPage(
           suggestVendorsUseCase: suggestUseCase,
           confirmPresetsUseCase: confirmUseCase,
+          loadPresetsUseCase: loadUseCase,
         ),
       ),
     );
@@ -100,6 +103,8 @@ void main() {
 
     expect(repo.saveCalls, 1);
     expect(find.textContaining('Unable to save presets.'), findsNothing);
+    expect(find.text('Presets saved successfully.'), findsOneWidget);
+    expect(find.text('A2B'), findsOneWidget);
   });
 
   testWidgets('shows server-empty message when API returns no presets', (

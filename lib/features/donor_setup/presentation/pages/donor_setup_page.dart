@@ -156,6 +156,12 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
         presets: presets,
       );
       await _cachePresets(presets);
+      // Replace list with server truth so the UI matches what was saved (not the
+      // full mock search result with stale checkboxes).
+      await _loadInitialPresets();
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _statusText = 'Presets saved successfully.';
       });
@@ -192,29 +198,29 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   Future<void> _loadInitialPresets() async {
     try {
       final presets = await _loadPresetsUseCase(userId: _authContext.userId);
-      if (presets.isNotEmpty) {
-        setState(() {
-          _suggestions
-            ..clear()
-            ..addAll(
-              presets
-                  .map(
-                    (preset) => VendorSuggestion(
-                      restaurantName: preset.restaurantName,
-                      menuItems: preset.menuItems,
-                      orderUrl: preset.orderUrl,
-                      appName: preset.appName,
-                      confidence: preset.confidence,
-                    ),
-                  )
-                  .toList(),
-            );
-          _statusText = 'Loaded saved presets from server.';
-        });
+      if (!mounted) {
         return;
       }
       setState(() {
-        _statusText = 'No saved presets on server yet.';
+        _suggestions
+          ..clear()
+          ..addAll(
+            presets
+                .map(
+                  (preset) => VendorSuggestion(
+                    restaurantName: preset.restaurantName,
+                    menuItems: preset.menuItems,
+                    orderUrl: preset.orderUrl,
+                    appName: preset.appName,
+                    confidence: preset.confidence,
+                  ),
+                )
+                .toList(),
+          );
+        _selected.clear();
+        _statusText = presets.isNotEmpty
+            ? 'Loaded saved presets from server.'
+            : 'No saved presets on server yet.';
       });
       return;
     } catch (error) {
@@ -279,6 +285,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       _suggestions
         ..clear()
         ..addAll(suggestions);
+      _selected.clear();
       _statusText = 'Using cached presets (offline fallback).';
     });
     return true;
