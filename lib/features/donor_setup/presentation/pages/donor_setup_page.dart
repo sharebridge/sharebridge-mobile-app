@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/clear_presets_usecase.dart';
 import '../../application/confirm_presets_usecase.dart';
@@ -360,6 +361,43 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     );
   }
 
+  Uri? _orderUri(VendorSuggestion suggestion) {
+    final uri = Uri.tryParse(suggestion.orderUrl.trim());
+    if (uri == null ||
+        !(uri.scheme == 'http' || uri.scheme == 'https')) {
+      return null;
+    }
+    return uri;
+  }
+
+  Future<void> _openVendorLink(VendorSuggestion suggestion) async {
+    final uri = _orderUri(suggestion);
+    if (uri == null) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Link is missing or not http/https.'),
+        ),
+      );
+      return;
+    }
+    final launched = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not open browser. Try again or check device settings.',
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -437,11 +475,31 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
               child: ListView.builder(
                 itemCount: _suggestions.length,
                 itemBuilder: (BuildContext context, int index) {
+                  final suggestion = _suggestions[index];
                   final selected = _selected.contains(index);
+                  final canOpen = _orderUri(suggestion) != null;
                   return CheckboxListTile(
                     isThreeLine: true,
-                    title: Text(_suggestions[index].restaurantName),
-                    subtitle: _suggestionTileSubtitle(_suggestions[index]),
+                    title: Text(suggestion.restaurantName),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        _suggestionTileSubtitle(suggestion),
+                        if (canOpen)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Align(
+                              alignment: AlignmentDirectional.centerStart,
+                              child: TextButton.icon(
+                                onPressed: () => _openVendorLink(suggestion),
+                                icon: const Icon(Icons.open_in_new, size: 18),
+                                label: const Text('Open vendor page'),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                     value: selected,
                     onChanged: (_) {
                       setState(() {

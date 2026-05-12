@@ -203,6 +203,7 @@ void main() {
 
     expect(find.text('A2B'), findsOneWidget);
     expect(find.textContaining('Veg Meals'), findsOneWidget);
+    expect(find.text('Open vendor page'), findsOneWidget);
     expect(find.text('Confirm and Save Presets'), findsOneWidget);
   });
 
