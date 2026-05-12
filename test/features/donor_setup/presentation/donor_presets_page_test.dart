@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/application/clear_presets_usecase.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/application/load_presets_usecase.dart';
 import 'package:sharebridge_mobile_app/features/donor_setup/data/auth_context.dart';
@@ -103,6 +104,7 @@ void main() {
   });
 
   testWidgets('Clear all confirms and empties list', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     final repo = _FakePresetsRepo(
       initial: <DonorPreset>[
         DonorPreset(
@@ -130,11 +132,17 @@ void main() {
 
     expect(find.text('Test Bistro'), findsOneWidget);
 
-    await tester.tap(find.text('Clear all'));
-    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('Clear all'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
 
     await tester.tap(find.byKey(const Key('confirm_clear_all_presets')));
-    await tester.pumpAndSettle();
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(repo.clearInvocations, 1);
