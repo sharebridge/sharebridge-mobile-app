@@ -1,5 +1,5 @@
-name: sharebridge_mobile_app
-description: ShareBridge mobile app scaffold for donor setup flow.
+name: sharingbridge_mobile_app
+description: SharingBridge mobile app scaffold for donor setup flow.
 publish_to: "none"
 version: 0.1.0+1
 

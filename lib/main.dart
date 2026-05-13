@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'features/donor_setup/presentation/pages/donor_setup_page.dart';
 
 void main() {
-  runApp(const ShareBridgeApp());
+  runApp(const SharingBridgeApp());
 }
 
-class ShareBridgeApp extends StatelessWidget {
-  const ShareBridgeApp({super.key});
+class SharingBridgeApp extends StatelessWidget {
+  const SharingBridgeApp({super.key});
 
   @override
   Widget build(BuildContext context) {

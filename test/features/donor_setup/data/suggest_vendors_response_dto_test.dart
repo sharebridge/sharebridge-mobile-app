@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sharebridge_mobile_app/features/donor_setup/data/dto/suggest_vendors_response_dto.dart';
+import 'package:sharingbridge_mobile_app/features/donor_setup/data/dto/suggest_vendors_response_dto.dart';
 
 void main() {
   test('maps valid suggestions and trims to five', () {

@@ -1,10 +1,10 @@
-# sharebridge-mobile-app
+# sharingbridge-mobile-app
 
 > Mobile application (React Native/Flutter)
 
 ## Overview
 
-This repository contains the **cross-platform mobile application** for ShareBridge, serving both donors and alms seekers.
+This repository contains the **cross-platform mobile application** for SharingBridge, serving both donors and alms seekers.
 
 **Key Features:**
 - 📱 Donor interface: Quick order placement, location validation, order tracking
@@ -17,7 +17,7 @@ This repository contains the **cross-platform mobile application** for ShareBrid
 
 **Technology Stack:** React Native or Flutter (TBD based on community input)
 
-For overall project context, see the [main ShareBridge repository](https://github.com/sharebridge/sharebridge).
+For overall project context, see the [main SharingBridge repository](https://github.com/sharingbridge/sharingbridge).
 
 ## Repository Status
 
@@ -30,7 +30,7 @@ For overall project context, see the [main ShareBridge repository](https://githu
 
 ## Contributing
 
-See the [main repository's CALL_FOR_CONTRIBUTORS.md](https://github.com/sharebridge/sharebridge/blob/main/development/CALL_FOR_CONTRIBUTORS.md) for:
+See the [main repository's CALL_FOR_CONTRIBUTORS.md](https://github.com/sharingbridge/sharingbridge/blob/main/development/CALL_FOR_CONTRIBUTORS.md) for:
 - How to contribute (technical and non-technical)
 - Joining GitHub Discussions
 - Submitting prompts and feature ideas
@@ -68,12 +68,12 @@ flutter run --dart-define=API_BASE_URL=http://192.168.1.25:8080 --dart-define=US
 `USER_ID` is optional and defaults to `demo-user`. The mobile client signs
 every request with `Authorization: Bearer demo.<USER_ID>` plus `X-User-Id`.
 This is a non-cryptographic MVP placeholder — real auth ships with
-sharebridge-user-service.
+sharingbridge-user-service.
 
 Design reference sequence:
-- `sharebridge/design/Donor_Setup_AI_Search_Sequence.md`
+- `sharingbridge/design/Donor_Setup_AI_Search_Sequence.md`
 - Contract reference:
-  - `https://github.com/sharebridge/sharebridge/blob/main/design/contracts/donor_setup_suggest_vendors.openapi.yaml`
+  - `https://github.com/sharingbridge/sharingbridge/blob/main/design/contracts/donor_setup_suggest_vendors.openapi.yaml`
 
 ## License
 
@@ -81,4 +81,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-Part of the [ShareBridge](https://github.com/sharebridge/sharebridge) ecosystem
+Part of the [SharingBridge](https://github.com/sharingbridge/sharingbridge) ecosystem

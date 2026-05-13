@@ -1,7 +1,7 @@
 /// Auth context for MVP signed-token flow.
 ///
 /// `authToken` is expected from `--dart-define=AUTH_TOKEN=...`, issued by
-/// sharebridge-user-service (`POST /v1/auth/token`).
+/// sharingbridge-user-service (`POST /v1/auth/token`).
 ///
 /// `userId` remains sourced from `--dart-define=USER_ID=...` for request
 /// payload fields and local display/state.

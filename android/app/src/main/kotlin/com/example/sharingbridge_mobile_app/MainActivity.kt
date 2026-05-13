@@ -1,4 +1,4 @@
-package com.example.sharebridge_mobile_app
+package com.example.sharingbridge_mobile_app
 
 import io.flutter.embedding.android.FlutterActivity
 
