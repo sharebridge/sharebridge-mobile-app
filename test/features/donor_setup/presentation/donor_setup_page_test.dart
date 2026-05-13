@@ -203,7 +203,9 @@ void main() {
 
     expect(find.text('A2B'), findsOneWidget);
     expect(find.textContaining('Veg Meals'), findsOneWidget);
+    expect(find.text('Copy link'), findsOneWidget);
     expect(find.text('Open vendor page'), findsOneWidget);
+    expect(find.text('Suggest again'), findsOneWidget);
     expect(find.text('Confirm and Save Presets'), findsOneWidget);
   });
 
@@ -232,7 +234,12 @@ void main() {
     expect(find.text('Bistro One'), findsOneWidget);
     expect(find.text('Bistro Two'), findsOneWidget);
 
-    await tester.tap(find.byType(CheckboxListTile).first);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CheckboxListTile).first,
+        matching: find.byType(Checkbox),
+      ),
+    );
     await tester.pump();
     await tester.tap(find.text('Confirm and Save Presets'));
     await tester.pumpAndSettle();
@@ -240,7 +247,7 @@ void main() {
     expect(repo.saveCalls, 1);
     expect(find.text('Bistro One'), findsOneWidget);
     expect(find.text('Bistro Two'), findsOneWidget);
-    expect(find.text('Presets saved successfully.'), findsOneWidget);
+    expect(find.text('Presets saved successfully.'), findsWidgets);
   });
 
   testWidgets('confirm saves selected presets and shows success text', (
@@ -265,14 +272,19 @@ void main() {
     await tester.tap(find.text('Suggest Vendors'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(CheckboxListTile));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CheckboxListTile).first,
+        matching: find.byType(Checkbox),
+      ),
+    );
     await tester.pump();
     await tester.tap(find.text('Confirm and Save Presets'));
     await tester.pumpAndSettle();
 
     expect(repo.saveCalls, 1);
     expect(find.textContaining('Unable to save presets.'), findsNothing);
-    expect(find.text('Presets saved successfully.'), findsOneWidget);
+    expect(find.text('Presets saved successfully.'), findsWidgets);
     expect(find.text('A2B'), findsOneWidget);
   });
 

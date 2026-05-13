@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -252,6 +253,9 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
         _selected.clear();
         _statusText = 'Presets saved successfully.';
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Presets saved successfully.')),
+      );
     } catch (error) {
       setState(() {
         _errorText = 'Unable to save presets. ${_friendlyError(error)}';
@@ -370,6 +374,26 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     return uri;
   }
 
+  Future<void> _copyVendorLink(String orderUrl) async {
+    final trimmed = orderUrl.trim();
+    if (trimmed.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No link to copy.')),
+      );
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: trimmed));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Order link copied to clipboard.')),
+    );
+  }
+
   Future<void> _openVendorLink(VendorSuggestion suggestion) async {
     final uri = _orderUri(suggestion);
     if (uri == null) {
@@ -449,9 +473,25 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
               ),
             ),
             const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: _queryController.text.trim().isEmpty ? null : _search,
-              child: const Text('Suggest Vendors'),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _queryController.text.trim().isEmpty || _loading
+                        ? null
+                        : _search,
+                    child: const Text('Suggest Vendors'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _queryController.text.trim().isEmpty || _loading
+                      ? null
+                      : _search,
+                  child: const Text('Suggest again'),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             if (_loading) const CircularProgressIndicator(),
@@ -478,6 +518,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
                   final suggestion = _suggestions[index];
                   final selected = _selected.contains(index);
                   final canOpen = _orderUri(suggestion) != null;
+                  final canCopy = suggestion.orderUrl.trim().isNotEmpty;
                   return CheckboxListTile(
                     isThreeLine: true,
                     title: Text(suggestion.restaurantName),
@@ -486,16 +527,29 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
                         _suggestionTileSubtitle(suggestion),
-                        if (canOpen)
+                        if (canCopy || canOpen)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
-                            child: Align(
-                              alignment: AlignmentDirectional.centerStart,
-                              child: TextButton.icon(
-                                onPressed: () => _openVendorLink(suggestion),
-                                icon: const Icon(Icons.open_in_new, size: 18),
-                                label: const Text('Open vendor page'),
-                              ),
+                            child: Wrap(
+                              spacing: 4,
+                              runSpacing: 0,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: <Widget>[
+                                if (canCopy)
+                                  TextButton.icon(
+                                    onPressed: () =>
+                                        _copyVendorLink(suggestion.orderUrl),
+                                    icon: const Icon(Icons.copy, size: 18),
+                                    label: const Text('Copy link'),
+                                  ),
+                                if (canOpen)
+                                  TextButton.icon(
+                                    onPressed: () =>
+                                        _openVendorLink(suggestion),
+                                    icon: const Icon(Icons.open_in_new, size: 18),
+                                    label: const Text('Open vendor page'),
+                                  ),
+                              ],
                             ),
                           ),
                       ],
