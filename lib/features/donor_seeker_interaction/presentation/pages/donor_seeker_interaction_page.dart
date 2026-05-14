@@ -1,13 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import '../../data/field_interaction_local_storage.dart';
-import '../../domain/models/field_interaction_draft.dart';
+import '../../application/delivery_instruction_stub.dart';
+import '../../../donor_setup/application/load_presets_usecase.dart';
+import '../../../donor_setup/data/auth_context.dart';
+import '../../../donor_setup/data/donor_setup_api_exceptions.dart';
+import '../../../donor_setup/data/donor_setup_repository_impl.dart';
+import '../../../donor_setup/data/http_donor_setup_api_client.dart';
+import '../../../donor_setup/domain/models/donor_preset.dart';
 
-/// Donor–seeker interaction MVP screens: trigger framing, consent, safety self-check,
-/// beneficiary text capture. Instruction pack, secure photo, and vendor redirect follow
-/// in later slices (BRD steps 6–8).
+/// Offer food help: brief dignity guidance, AI-stub instructions, copy,
+/// then open saved vendor deep links from donor presets.
 class DonorSeekerInteractionPage extends StatefulWidget {
-  const DonorSeekerInteractionPage({super.key});
+  const DonorSeekerInteractionPage({
+    super.key,
+    this.loadPresetsUseCase,
+    this.authContext,
+  });
+
+  final LoadPresetsUseCase? loadPresetsUseCase;
+  final AuthContext? authContext;
 
   @override
   State<DonorSeekerInteractionPage> createState() =>
@@ -15,296 +28,237 @@ class DonorSeekerInteractionPage extends StatefulWidget {
 }
 
 class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage> {
-  int _step = 0;
+  static const String _defaultApiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:8080',
+  );
 
-  bool _foodIntent = false;
-  bool _identificationConsent = false;
-  bool _safetyOk = false;
+  late final AuthContext _authContext;
+  late final LoadPresetsUseCase _loadPresetsUseCase;
 
-  final TextEditingController _appearanceController = TextEditingController();
-  final TextEditingController _privacyController = TextEditingController();
-
-  FieldInteractionDraft? _lastSaved;
-
-  /// Shown when Continue is blocked (consent / safety gates).
-  String? _stepGateMessage;
+  List<DonorPreset> _presets = <DonorPreset>[];
+  String _instructions = '';
+  bool _loading = true;
+  String? _errorText;
+  bool _showVendorLinks = false;
 
   @override
   void initState() {
     super.initState();
-    _hydrateDraft();
+    _authContext = widget.authContext ?? AuthContext.fromEnvironment();
+    _loadPresetsUseCase =
+        widget.loadPresetsUseCase ??
+        LoadPresetsUseCase(
+          DonorSetupRepositoryImpl(
+            HttpDonorSetupApiClient(
+              baseUrl: _defaultApiBaseUrl,
+              authContext: _authContext,
+            ),
+          ),
+        );
+    _bootstrap();
   }
 
-  Future<void> _hydrateDraft() async {
-    final draft = await loadFieldInteractionDraft();
-    if (!mounted || draft == null) {
+  Future<void> _bootstrap() async {
+    setState(() {
+      _loading = true;
+      _errorText = null;
+    });
+    try {
+      final list = await _loadPresetsUseCase(userId: _authContext.userId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _presets = list;
+        _instructions = buildDeliveryInstructionsStub(list);
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _errorText = _friendlyLoadError(e);
+        _instructions = buildDeliveryInstructionsStub(<DonorPreset>[]);
+      });
+    }
+  }
+
+  String _friendlyLoadError(Object e) {
+    if (e is DonorSetupTimeoutException) {
+      return 'Could not load presets (timeout). You can still copy instructions and open links if you know them.';
+    }
+    if (e is DonorSetupNetworkException) {
+      return 'Could not load presets (offline). Saved vendor links appear after you reconnect.';
+    }
+    if (e is DonorSetupServerException) {
+      return 'Could not load presets (server error). Try again in a moment.';
+    }
+    return 'Could not load saved presets.';
+  }
+
+  Future<void> _copyInstructions() async {
+    final text = _instructions.trim();
+    if (text.isEmpty) {
       return;
     }
     setState(() {
-      _lastSaved = draft;
+      _showVendorLinks = true;
     });
-  }
-
-  @override
-  void dispose() {
-    _appearanceController.dispose();
-    _privacyController.dispose();
-    super.dispose();
-  }
-
-  void _goNext() {
-    setState(() => _stepGateMessage = null);
-    if (_step == 1) {
-      if (!_foodIntent || !_identificationConsent) {
-        setState(() {
-          _stepGateMessage =
-              'Please confirm both statements to continue respectfully.';
-        });
-        return;
-      }
-    }
-    if (_step == 2) {
-      if (!_safetyOk) {
-        setState(() {
-          _stepGateMessage =
-              'If it does not feel safe to arrange delivery here, stop — you can try again later.';
-        });
-        return;
-      }
-    }
-    setState(() {
-      _step += 1;
-    });
-  }
-
-  void _goBack() {
-    if (_step <= 0) {
-      return;
-    }
-    setState(() {
-      _stepGateMessage = null;
-      _step -= 1;
-    });
-  }
-
-  Future<void> _finish() async {
-    final draft = FieldInteractionDraft(
-      foodIntentConfirmed: _foodIntent,
-      identificationConsentConfirmed: _identificationConsent,
-      safetyFeelsOk: _safetyOk,
-      beneficiaryAppearanceNotes: _appearanceController.text.trim(),
-      beneficiaryPrivacyNotes: _privacyController.text.trim(),
-      completedAt: DateTime.now().toUtc(),
-    );
-    await saveFieldInteractionDraft(draft);
+    await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) {
       return;
     }
-    setState(() {
-      _lastSaved = draft;
-    });
-    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Instructions copied. Open a saved vendor app below and paste into delivery notes.',
+        ),
+      ),
+    );
   }
 
-  void _onPrimaryPressed() {
-    if (_step == 3) {
-      _finish();
-    } else {
-      _goNext();
+  Uri? _orderUri(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      return null;
     }
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null || !(uri.isScheme('http') || uri.isScheme('https'))) {
+      return null;
+    }
+    return uri;
   }
 
-  static const List<String> _stepTitles = <String>[
-    'Start here',
-    'Consent',
-    'Quick safety',
-    'Beneficiary details',
-  ];
-
-  Widget _buildStepBody() {
-    switch (_step) {
-      case 0:
-        return const Text(
-          'This flow is for when someone has approached you and is asking for '
-          'food or essentials — not for changing your saved vendor presets.\n\n'
-          'Take your time. You can leave this screen at any point.',
-        );
-      case 1:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            CheckboxListTile(
-              key: const Key('field_flow_consent_food'),
-              value: _foodIntent,
-              onChanged: (bool? v) {
-                setState(() {
-                  _foodIntent = v ?? false;
-                  _stepGateMessage = null;
-                });
-              },
-              title: const Text(
-                'I intend to offer food or essentials through a delivery order — not cash.',
-              ),
-            ),
-            CheckboxListTile(
-              key: const Key('field_flow_consent_id'),
-              value: _identificationConsent,
-              onChanged: (bool? v) {
-                setState(() {
-                  _identificationConsent = v ?? false;
-                  _stepGateMessage = null;
-                });
-              },
-              title: const Text(
-                'The person agrees to share limited delivery identification details '
-                '(for example a respectful description or photo) so the handover can work.',
-              ),
-            ),
-          ],
-        );
-      case 2:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              'SharingBridge will add map- and signal-based checks later. For now, '
-              'use your judgment: public lighting, traffic, and whether you feel safe '
-              'staying through handover.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 12),
-            CheckboxListTile(
-              key: const Key('field_flow_safety_ok'),
-              value: _safetyOk,
-              onChanged: (bool? v) {
-                setState(() {
-                  _safetyOk = v ?? false;
-                  _stepGateMessage = null;
-                });
-              },
-              title: const Text(
-                'I believe arranging delivery at this spot is reasonably safe right now.',
-              ),
-            ),
-          ],
-        );
-      case 3:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            TextField(
-              key: const Key('field_flow_appearance'),
-              controller: _appearanceController,
-              decoration: const InputDecoration(
-                labelText: 'Visible cues for delivery (optional)',
-                hintText: 'Example: grey jacket, outside the north entrance',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 2,
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const Key('field_flow_privacy'),
-              controller: _privacyController,
-              decoration: const InputDecoration(
-                labelText: 'Sensitivity or dignity notes (optional)',
-                hintText: 'Anything the courier should say or avoid?',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 2,
-            ),
-            if (_lastSaved != null) ...<Widget>[
-              const SizedBox(height: 16),
-              Text(
-                'Last saved: ${_lastSaved!.completedAt.toLocal()}',
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-            ],
-          ],
-        );
-      default:
-        return const SizedBox.shrink();
+  Future<void> _openPreset(DonorPreset preset) async {
+    final uri = _orderUri(preset.orderUrl);
+    if (uri == null) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This preset has no http/https link to open.'),
+        ),
+      );
+      return;
+    }
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not open the app or browser. Try again or copy the link from Donor Setup.',
+          ),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: _step == 0,
-      onPopInvokedWithResult: (bool didPop, dynamic result) {
-        if (!didPop && _step > 0) {
-          _goBack();
-        }
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          leading: IconButton(
-            key: const Key('field_flow_appbar_back'),
-            icon: const Icon(Icons.arrow_back),
-            tooltip: _step > 0 ? 'Previous step' : 'Close',
-            onPressed: () {
-              if (_step > 0) {
-                _goBack();
-              } else {
-                Navigator.of(context).maybePop();
-              }
-            },
-          ),
-          title: const Text('Offer food help'),
-        ),
-        bottomNavigationBar: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Row(
-              children: <Widget>[
-                if (_step > 0)
-                  TextButton(
-                    key: const Key('field_flow_back'),
-                    onPressed: _goBack,
-                    child: const Text('Back'),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Offer food help'),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                Text(
+                  'Quick guidance',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Treat personal details with care: share only what is needed for '
+                  'the courier to complete the handover with dignity.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Before taking a photo to identify the person receiving help, '
+                  'ask for their consent. If they prefer not to be photographed, '
+                  'use a respectful verbal description instead.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Delivery instructions (AI draft)',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Generated automatically from your saved presets (live AI wiring comes later). '
+                  'Tap Copy, then paste into the vendor app’s delivery notes field.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                if (_errorText != null) ...<Widget>[
+                  Text(
+                    _errorText!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                if (_step > 0) const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton(
-                    key: const Key('field_flow_primary'),
-                    onPressed: _onPrimaryPressed,
-                    child: Text(_step == 3 ? 'Save & close' : 'Continue'),
+                  const SizedBox(height: 8),
+                ],
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: SelectableText(
+                      _instructions,
+                      key: const Key('field_help_instruction_body'),
+                    ),
                   ),
                 ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  key: const Key('field_help_copy_instructions'),
+                  onPressed: _instructions.trim().isEmpty ? null : _copyInstructions,
+                  icon: const Icon(Icons.copy),
+                  label: const Text('Copy instructions'),
+                ),
+                if (_presets.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 28),
+                  Text(
+                    _showVendorLinks
+                        ? 'Open a saved vendor app'
+                        : 'Saved vendor links (tap Copy instructions first)',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  ...List<Widget>.generate(_presets.length, (int i) {
+                    final DonorPreset p = _presets[i];
+                    final uri = _orderUri(p.orderUrl);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: OutlinedButton.icon(
+                        key: Key('field_help_open_vendor_$i'),
+                        onPressed: (uri != null && _showVendorLinks)
+                            ? () => _openPreset(p)
+                            : null,
+                        icon: const Icon(Icons.open_in_new),
+                        label: Text('Open ${p.appName}: ${p.restaurantName}'),
+                      ),
+                    );
+                  }),
+                ],
               ],
             ),
           ),
-        ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-        children: <Widget>[
-          Text(
-            'Step ${_step + 1} of 4',
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _stepTitles[_step],
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 20),
-          if (_stepGateMessage != null) ...<Widget>[
-            Text(
-              _stepGateMessage!,
-              key: const Key('field_flow_gate_message'),
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-          _buildStepBody(),
-        ],
-      ),
-    ),
     );
   }
 }

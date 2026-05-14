@@ -1,15 +1,57 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sharingbridge_mobile_app/features/donor_seeker_interaction/data/field_interaction_local_storage.dart';
 import 'package:sharingbridge_mobile_app/features/donor_seeker_interaction/presentation/pages/donor_seeker_interaction_page.dart';
+import 'package:sharingbridge_mobile_app/features/donor_setup/application/load_presets_usecase.dart';
+import 'package:sharingbridge_mobile_app/features/donor_setup/data/auth_context.dart';
+import 'package:sharingbridge_mobile_app/features/donor_setup/domain/models/donor_preset.dart';
+import 'package:sharingbridge_mobile_app/features/donor_setup/domain/models/vendor_suggestion.dart';
+import 'package:sharingbridge_mobile_app/features/donor_setup/domain/repositories/donor_setup_repository.dart';
 import 'package:sharingbridge_mobile_app/presentation/app_home_page.dart';
 
-void main() {
-  setUp(() {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
-  });
+class _FakeRepo implements DonorSetupRepository {
+  _FakeRepo(this.presets);
 
+  final List<DonorPreset> presets;
+
+  @override
+  Future<void> clearPresets({required String userId}) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<DonorPreset>> loadPresets({required String userId}) async {
+    return List<DonorPreset>.from(presets);
+  }
+
+  @override
+  Future<void> removePreset({
+    required String userId,
+    required DonorPreset preset,
+  }) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> savePresets({
+    required String userId,
+    required List<DonorPreset> presets,
+  }) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<VendorSuggestion>> suggestVendors({
+    required String queryText,
+    required double? lat,
+    required double? lng,
+    String? manualArea,
+  }) async {
+    throw UnimplementedError();
+  }
+}
+
+void main() {
   testWidgets('home hub lists donor setup and opens field flow', (
     WidgetTester tester,
   ) async {
@@ -24,80 +66,62 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Offer food help'), findsWidgets);
-    expect(find.textContaining('Start here'), findsOneWidget);
+    expect(find.textContaining('Quick guidance'), findsOneWidget);
   });
 
-  testWidgets('AppBar back goes to previous step, not home hub', (
+  testWidgets('field page loads instructions and enables vendors after copy', (
     WidgetTester tester,
   ) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+      MethodCall call,
+    ) async {
+      if (call.method == 'Clipboard.setData') {
+        return;
+      }
+      return null;
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final presets = <DonorPreset>[
+      DonorPreset(
+        restaurantName: 'Cafe X',
+        orderUrl: 'https://example.com/order',
+        menuItems: const <String>['Coffee'],
+        appName: 'Swiggy',
+        source: 'test',
+        confidence: 0.8,
+      ),
+    ];
+
     await tester.pumpWidget(
-      const MaterialApp(home: DonorSeekerInteractionPage()),
+      MaterialApp(
+        home: DonorSeekerInteractionPage(
+          authContext: const AuthContext(userId: 'u1', authToken: 'tok'),
+          loadPresetsUseCase: LoadPresetsUseCase(_FakeRepo(presets)),
+        ),
+      ),
     );
 
-    await tester.tap(find.byKey(const Key('field_flow_primary')));
-    await tester.pump();
-    expect(find.text('Step 2 of 4'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('field_flow_appbar_back')));
-    await tester.pump();
-
-    expect(find.text('Step 1 of 4'), findsOneWidget);
-    expect(find.text('Start here'), findsOneWidget);
-    expect(find.text('SharingBridge'), findsNothing);
-  });
-
-  testWidgets('field flow validates consent and saves draft', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      const MaterialApp(home: DonorSeekerInteractionPage()),
-    );
-
-    await tester.tap(find.byKey(const Key('field_flow_primary')));
-    await tester.pump();
-
-    await tester.tap(find.byKey(const Key('field_flow_primary')));
-    await tester.pump();
-    await tester.pump();
-    expect(find.textContaining('Please confirm both'), findsOneWidget);
-    expect(find.byKey(const Key('field_flow_gate_message')), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('field_flow_back')));
-    await tester.pump();
-    expect(find.byKey(const Key('field_flow_gate_message')), findsNothing);
-
-    await tester.tap(find.byKey(const Key('field_flow_primary')));
-    await tester.pump();
-
-    await tester.tap(find.byKey(const Key('field_flow_consent_food')));
-    await tester.tap(find.byKey(const Key('field_flow_consent_id')));
-    await tester.pump();
-
-    await tester.tap(find.byKey(const Key('field_flow_primary')));
-    await tester.pump();
-
-    await tester.tap(find.byKey(const Key('field_flow_primary')));
-    await tester.pump();
-    expect(find.textContaining('does not feel safe'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('field_flow_safety_ok')));
-    await tester.pump();
-
-    await tester.tap(find.byKey(const Key('field_flow_primary')));
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(const Key('field_flow_appearance')),
-      'Blue cap near the steps',
-    );
-    await tester.tap(find.byKey(const Key('field_flow_primary')));
+    expect(find.byKey(const Key('field_help_instruction_body')), findsOneWidget);
+    expect(find.textContaining('consent'), findsWidgets);
+
+    final openFinder = find.byKey(const Key('field_help_open_vendor_0'));
+    expect(openFinder, findsOneWidget);
+    expect(tester.widget<OutlinedButton>(openFinder).onPressed, isNull);
+
+    await tester.tap(find.byKey(const Key('field_help_copy_instructions')));
     await tester.pumpAndSettle();
 
-    final draft = await loadFieldInteractionDraft();
-    expect(draft, isNotNull);
-    expect(draft!.beneficiaryAppearanceNotes, 'Blue cap near the steps');
-    expect(draft.foodIntentConfirmed, isTrue);
-    expect(draft.identificationConsentConfirmed, isTrue);
-    expect(draft.safetyFeelsOk, isTrue);
+    expect(tester.widget<OutlinedButton>(openFinder).onPressed, isNotNull);
+    expect(find.textContaining('Instructions copied'), findsOneWidget);
   });
 }
