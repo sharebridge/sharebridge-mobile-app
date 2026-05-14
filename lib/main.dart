@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'features/donor_setup/presentation/pages/donor_setup_page.dart';
+import 'presentation/app_home_page.dart';
 
 void main() {
   runApp(const SharingBridgeApp());
@@ -11,6 +11,6 @@ class SharingBridgeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(home: DonorSetupPage());
+    return const MaterialApp(home: AppHomePage());
   }
 }
