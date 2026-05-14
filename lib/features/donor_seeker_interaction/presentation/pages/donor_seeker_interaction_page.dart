@@ -230,33 +230,53 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Offer food help'),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: Row(
-            children: <Widget>[
-              if (_step > 0)
-                TextButton(
-                  key: const Key('field_flow_back'),
-                  onPressed: _goBack,
-                  child: const Text('Back'),
+    return PopScope(
+      canPop: _step == 0,
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (!didPop && _step > 0) {
+          _goBack();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          leading: IconButton(
+            key: const Key('field_flow_appbar_back'),
+            icon: const Icon(Icons.arrow_back),
+            tooltip: _step > 0 ? 'Previous step' : 'Close',
+            onPressed: () {
+              if (_step > 0) {
+                _goBack();
+              } else {
+                Navigator.of(context).maybePop();
+              }
+            },
+          ),
+          title: const Text('Offer food help'),
+        ),
+        bottomNavigationBar: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Row(
+              children: <Widget>[
+                if (_step > 0)
+                  TextButton(
+                    key: const Key('field_flow_back'),
+                    onPressed: _goBack,
+                    child: const Text('Back'),
+                  ),
+                if (_step > 0) const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton(
+                    key: const Key('field_flow_primary'),
+                    onPressed: _onPrimaryPressed,
+                    child: Text(_step == 3 ? 'Save & close' : 'Continue'),
+                  ),
                 ),
-              if (_step > 0) const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton(
-                  key: const Key('field_flow_primary'),
-                  onPressed: _onPrimaryPressed,
-                  child: Text(_step == 3 ? 'Save & close' : 'Continue'),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
         children: <Widget>[
@@ -284,6 +304,7 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
           _buildStepBody(),
         ],
       ),
+    ),
     );
   }
 }

@@ -27,6 +27,25 @@ void main() {
     expect(find.textContaining('Start here'), findsOneWidget);
   });
 
+  testWidgets('AppBar back goes to previous step, not home hub', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: DonorSeekerInteractionPage()),
+    );
+
+    await tester.tap(find.byKey(const Key('field_flow_primary')));
+    await tester.pump();
+    expect(find.text('Step 2 of 4'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('field_flow_appbar_back')));
+    await tester.pump();
+
+    expect(find.text('Step 1 of 4'), findsOneWidget);
+    expect(find.text('Start here'), findsOneWidget);
+    expect(find.text('SharingBridge'), findsNothing);
+  });
+
   testWidgets('field flow validates consent and saves draft', (
     WidgetTester tester,
   ) async {
