@@ -41,6 +41,14 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.textContaining('Please confirm both'), findsOneWidget);
+    expect(find.byKey(const Key('field_flow_gate_message')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('field_flow_back')));
+    await tester.pump();
+    expect(find.byKey(const Key('field_flow_gate_message')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('field_flow_primary')));
+    await tester.pump();
 
     await tester.tap(find.byKey(const Key('field_flow_consent_food')));
     await tester.tap(find.byKey(const Key('field_flow_consent_id')));

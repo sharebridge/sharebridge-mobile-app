@@ -58,7 +58,7 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
       if (!_foodIntent || !_identificationConsent) {
         setState(() {
           _stepGateMessage =
-              'Please confirm both statements above to continue respectfully.';
+              'Please confirm both statements to continue respectfully.';
         });
         return;
       }
@@ -82,6 +82,7 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
       return;
     }
     setState(() {
+      _stepGateMessage = null;
       _step -= 1;
     });
   }
