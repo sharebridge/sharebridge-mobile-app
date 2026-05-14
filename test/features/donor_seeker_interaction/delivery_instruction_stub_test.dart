@@ -26,4 +26,20 @@ void main() {
     final text = buildDeliveryInstructionsStub(<DonorPreset>[]);
     expect(text, contains('No saved presets'));
   });
+
+  test('reference photo flag adds vision placeholder line', () {
+    final text = buildDeliveryInstructionsStub(
+      <DonorPreset>[],
+      referencePhotoIncluded: true,
+    );
+    expect(text, contains('vision'));
+  });
+
+  test('verbal notes appear in stub when non-empty', () {
+    final text = buildDeliveryInstructionsStub(
+      <DonorPreset>[],
+      verbalHandoverNotes: '  Blue umbrella  ',
+    );
+    expect(text, contains('Blue umbrella'));
+  });
 }

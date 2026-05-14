@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>SharingBridge uses the camera only when you choose to attach a reference photo for delivery handover, with consent.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>SharingBridge uses your photo library only when you choose an optional reference image for delivery instructions.</string>
 </dict>
 </plist>

@@ -2,7 +2,11 @@ import '../../donor_setup/domain/models/donor_preset.dart';
 
 /// MVP placeholder for an AI-generated delivery instruction block.
 /// Replace with integration-service / model call when the pipeline exists.
-String buildDeliveryInstructionsStub(List<DonorPreset> presets) {
+String buildDeliveryInstructionsStub(
+  List<DonorPreset> presets, {
+  bool referencePhotoIncluded = false,
+  String? verbalHandoverNotes,
+}) {
   final buffer = StringBuffer()
     ..writeln('SharingBridge — delivery notes (draft, AI stub)')
     ..writeln('')
@@ -17,6 +21,27 @@ String buildDeliveryInstructionsStub(List<DonorPreset> presets) {
       'clear, voluntary consent. If they decline, use a respectful verbal '
       'description instead.',
     )
+    ..writeln('');
+
+  if (referencePhotoIncluded) {
+    buffer
+      ..writeln('')
+      ..writeln(
+        'Reference: a photo was attached for this request. When the vision '
+        'API is connected, it will inform wording here; today this line is '
+        'only a placeholder.',
+      );
+  }
+
+  final trimmedVerbal = verbalHandoverNotes?.trim();
+  if (trimmedVerbal != null && trimmedVerbal.isNotEmpty) {
+    buffer
+      ..writeln('')
+      ..writeln('Handover notes you entered:')
+      ..writeln(trimmedVerbal);
+  }
+
+  buffer
     ..writeln('')
     ..writeln(
       'Copy this block into the delivery instructions field in your vendor '
