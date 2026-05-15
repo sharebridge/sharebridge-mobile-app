@@ -50,6 +50,8 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   final TextEditingController _manualAreaController = TextEditingController(
     text: 'Chennai',
   );
+  final TextEditingController _customOrderLinkController =
+      TextEditingController();
   late final AuthContext _authContext;
   late final SuggestVendorsUseCase _suggestVendorsUseCase;
   late final ConfirmPresetsUseCase _confirmPresetsUseCase;
@@ -178,7 +180,20 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   void dispose() {
     _queryController.dispose();
     _manualAreaController.dispose();
+    _customOrderLinkController.dispose();
     super.dispose();
+  }
+
+  /// Donor-pasted order page from vendor app; overrides suggestion search links.
+  String _effectiveOrderUrl(VendorSuggestion suggestion) {
+    final custom = _customOrderLinkController.text.trim();
+    if (custom.isNotEmpty) {
+      final uri = Uri.tryParse(custom);
+      if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+        return custom;
+      }
+    }
+    return suggestion.orderUrl.trim();
   }
 
   Future<void> _search() async {
@@ -227,14 +242,17 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
 
     final presets = _selected
         .map(
-          (index) => DonorPreset(
-            restaurantName: _suggestions[index].restaurantName,
-            orderUrl: _suggestions[index].orderUrl,
-            menuItems: _suggestions[index].menuItems,
-            appName: _suggestions[index].appName,
-            source: 'ai_suggestion',
-            confidence: _suggestions[index].confidence,
-          ),
+          (index) {
+            final suggestion = _suggestions[index];
+            return DonorPreset(
+              restaurantName: suggestion.restaurantName,
+              orderUrl: _effectiveOrderUrl(suggestion),
+              menuItems: suggestion.menuItems,
+              appName: suggestion.appName,
+              source: 'ai_suggestion',
+              confidence: suggestion.confidence,
+            );
+          },
         )
         .toList();
 
@@ -366,7 +384,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   }
 
   Uri? _orderUri(VendorSuggestion suggestion) {
-    final uri = Uri.tryParse(suggestion.orderUrl.trim());
+    final uri = Uri.tryParse(_effectiveOrderUrl(suggestion));
     if (uri == null ||
         !(uri.scheme == 'http' || uri.scheme == 'https')) {
       return null;
@@ -472,6 +490,18 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
                 hintText: 'Enter city/area (e.g. Chennai)',
               ),
             ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _customOrderLinkController,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: 'Your order page link (optional)',
+                hintText:
+                    'Paste the link from Zomato/Swiggy after you open the restaurant',
+                helperText:
+                    'Search links open the vendor app; paste your exact order URL here before saving.',
+              ),
+            ),
             const SizedBox(height: 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -518,7 +548,8 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
                   final suggestion = _suggestions[index];
                   final selected = _selected.contains(index);
                   final canOpen = _orderUri(suggestion) != null;
-                  final canCopy = suggestion.orderUrl.trim().isNotEmpty;
+                  final effectiveUrl = _effectiveOrderUrl(suggestion);
+                  final canCopy = effectiveUrl.isNotEmpty;
                   return CheckboxListTile(
                     isThreeLine: true,
                     title: Text(suggestion.restaurantName),
@@ -538,7 +569,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
                                 if (canCopy)
                                   TextButton.icon(
                                     onPressed: () =>
-                                        _copyVendorLink(suggestion.orderUrl),
+                                        _copyVendorLink(effectiveUrl),
                                     icon: const Icon(Icons.copy, size: 18),
                                     label: const Text('Copy link'),
                                   ),

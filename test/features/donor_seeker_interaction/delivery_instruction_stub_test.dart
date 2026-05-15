@@ -3,7 +3,7 @@ import 'package:sharingbridge_mobile_app/features/donor_seeker_interaction/appli
 import 'package:sharingbridge_mobile_app/features/donor_setup/domain/models/donor_preset.dart';
 
 void main() {
-  test('stub mentions dignity, consent, and presets', () {
+  test('stub is courier-facing without donor UI boilerplate', () {
     final presets = <DonorPreset>[
       DonorPreset(
         restaurantName: 'A2B',
@@ -15,24 +15,25 @@ void main() {
       ),
     ];
     final text = buildDeliveryInstructionsStub(presets);
-    expect(text, contains('personal details'));
-    expect(text, contains('consent'));
-    expect(text, contains('photo'));
-    expect(text, contains('A2B'));
-    expect(text, contains('Zomato'));
+    expect(text, contains('SharingBridge'));
+    expect(text, contains('Additional details:'));
+    expect(text, isNot(contains('AI-sensitized')));
+    expect(text, isNot(contains('saved order shortcuts')));
+    expect(text, isNot(contains('A2B')));
   });
 
-  test('empty presets still returns copyable guidance', () {
+  test('empty presets still returns courier text with donor hint', () {
     final text = buildDeliveryInstructionsStub(<DonorPreset>[]);
-    expect(text, contains('No saved presets'));
+    expect(text, contains('Additional details:'));
+    expect(text, contains('Donor Setup'));
   });
 
-  test('reference photo flag adds vision placeholder line', () {
+  test('reference photo flag adds courier photo line', () {
     final text = buildDeliveryInstructionsStub(
       <DonorPreset>[],
       referencePhotoIncluded: true,
     );
-    expect(text, contains('vision'));
+    expect(text, contains('Reference photo'));
   });
 
   test('verbal notes appear in stub when non-empty', () {
