@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../application/api_delivery_instructions_request.dart';
 import '../../application/stub_delivery_instructions_request.dart';
 import '../../../donor_setup/application/load_presets_usecase.dart';
 import '../../../donor_setup/data/auth_context.dart';
@@ -69,7 +70,20 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
   bool _generatingInstructions = false;
 
   DeliveryInstructionsRequest get _deliveryRequest =>
-      widget.deliveryInstructionsRequest ?? requestStubDeliveryInstructions;
+      widget.deliveryInstructionsRequest ?? _defaultDeliveryInstructionsRequest;
+
+  Future<String> _defaultDeliveryInstructionsRequest({
+    required List<DonorPreset> presets,
+    required bool hasReferencePhoto,
+    String? verbalHandoverNotes,
+  }) {
+    return requestDeliveryInstructionsFromApi(
+      baseUrl: _defaultApiBaseUrl,
+      presets: presets,
+      hasReferencePhoto: hasReferencePhoto,
+      verbalHandoverNotes: verbalHandoverNotes,
+    );
+  }
 
   Future<XFile?> _defaultPick(ImageSource source) {
     return ImagePicker().pickImage(

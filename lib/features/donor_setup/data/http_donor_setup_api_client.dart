@@ -138,6 +138,20 @@ class HttpDonorSetupApiClient implements DonorSetupApiClient {
     );
   }
 
+  /// Donor–seeker instruction pack (integration-service → ai-orchestration).
+  Future<Map<String, dynamic>> requestInstructionPack({
+    required Map<String, dynamic> body,
+  }) {
+    return _runWithRetry(
+      policy: retryPolicy,
+      operation: () => _sendJson(
+        method: 'POST',
+        uri: Uri.parse('$baseUrl/v1/donor-seeker/instruction-pack'),
+        body: body,
+      ),
+    );
+  }
+
   @override
   Future<void> removePreset({
     required String userId,
