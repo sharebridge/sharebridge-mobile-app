@@ -17,6 +17,7 @@ import '../../data/donor_setup_local_storage.dart';
 import '../../data/http_donor_setup_api_client.dart';
 import '../../domain/models/donor_preset.dart';
 import '../../domain/models/vendor_suggestion.dart';
+import '../widgets/manual_vendor_entry_row.dart';
 import 'donor_presets_page.dart';
 
 class DonorSetupPage extends StatefulWidget {
@@ -62,6 +63,8 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   String? _errorText;
   String? _statusText;
   final Set<int> _selected = <int>{};
+  final List<ManualVendorEntryRow> _manualRows = <ManualVendorEntryRow>[];
+  final Set<String> _selectedManualIds = <String>{};
   /// When true, [_suggestions] came from [Suggest Vendors], not from server/cache.
   /// Returning from Saved presets must not replace this list with [loadPresets] only.
   bool _suggestionsFromSearch = false;
@@ -182,8 +185,34 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     _queryController.dispose();
     _manualAreaController.dispose();
     _disposeManualUrlControllers();
+    for (final ManualVendorEntryRow row in _manualRows) {
+      row.dispose();
+    }
     super.dispose();
   }
+
+  void _addManualRow() {
+    setState(() {
+      final row = ManualVendorEntryRow();
+      _manualRows.add(row);
+      _selectedManualIds.add(row.id);
+    });
+  }
+
+  void _removeManualRow(String id) {
+    setState(() {
+      final index = _manualRows.indexWhere((ManualVendorEntryRow r) => r.id == id);
+      if (index < 0) {
+        return;
+      }
+      _manualRows[index].dispose();
+      _manualRows.removeAt(index);
+      _selectedManualIds.remove(id);
+    });
+  }
+
+  bool get _hasAnythingSelected =>
+      _selected.isNotEmpty || _selectedManualIds.isNotEmpty;
 
   void _disposeManualUrlControllers() {
     for (final TextEditingController c in _manualUrlByIndex.values) {
@@ -252,7 +281,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   }
 
   Future<void> _confirmAndSave() async {
-    if (_selected.isEmpty || _saving) {
+    if (!_hasAnythingSelected || _saving) {
       return;
     }
     setState(() {
@@ -261,21 +290,45 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       _statusText = null;
     });
 
-    final presets = _selected
-        .map(
-          (index) {
-            final suggestion = _suggestions[index];
-            return DonorPreset(
-              restaurantName: suggestion.restaurantName,
-              orderUrl: _effectiveOrderUrl(suggestion, index),
-              menuItems: suggestion.menuItems,
-              appName: suggestion.appName,
-              source: 'ai_suggestion',
-              confidence: suggestion.confidence,
-            );
-          },
-        )
-        .toList();
+    final presets = <DonorPreset>[];
+    for (final int index in _selected) {
+      final suggestion = _suggestions[index];
+      presets.add(
+        DonorPreset(
+          restaurantName: suggestion.restaurantName,
+          orderUrl: _effectiveOrderUrl(suggestion, index),
+          menuItems: suggestion.menuItems,
+          appName: suggestion.appName,
+          source: 'ai_suggestion',
+          confidence: suggestion.confidence,
+        ),
+      );
+    }
+
+    for (final ManualVendorEntryRow row in _manualRows) {
+      if (!_selectedManualIds.contains(row.id)) {
+        continue;
+      }
+      final preset = row.toPreset();
+      if (preset == null) {
+        setState(() {
+          _saving = false;
+          _errorText =
+              'Each selected manual vendor needs restaurant name, vendor app, '
+              'and a valid http/https order link.';
+        });
+        return;
+      }
+      presets.add(preset);
+    }
+
+    if (presets.isEmpty) {
+      setState(() {
+        _saving = false;
+        _errorText = 'Select at least one vendor to save.';
+      });
+      return;
+    }
 
     try {
       await _confirmPresetsUseCase(
@@ -290,6 +343,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       // selection so presets/back navigation do not collapse the list to saved-only.
       setState(() {
         _selected.clear();
+        _selectedManualIds.clear();
         _statusText = 'Presets saved successfully.';
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -384,6 +438,11 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     }
     setState(() {
       _disposeManualUrlControllers();
+      for (final ManualVendorEntryRow row in _manualRows) {
+        row.dispose();
+      }
+      _manualRows.clear();
+      _selectedManualIds.clear();
       _suggestions.clear();
       _selected.clear();
       _suggestionsFromSearch = false;
@@ -552,91 +611,149 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
                   style: const TextStyle(color: Colors.green),
                 ),
               ),
-            if (_suggestions.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'Paste an order link under each restaurant after you find it in the vendor app.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
             Expanded(
-              child: ListView.builder(
-                itemCount: _suggestions.length,
-                itemBuilder: (BuildContext context, int index) {
-                  final suggestion = _suggestions[index];
-                  final selected = _selected.contains(index);
-                  final canOpen = _orderUri(suggestion, index) != null;
-                  final effectiveUrl = _effectiveOrderUrl(suggestion, index);
-                  final canCopy = effectiveUrl.isNotEmpty;
-                  final manualController = _manualUrlByIndex[index];
-                  return CheckboxListTile(
-                    isThreeLine: true,
-                    title: Text(suggestion.restaurantName),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        _suggestionTileSubtitle(suggestion),
-                        if (manualController != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: TextField(
-                              key: Key('donor_setup_manual_url_$index'),
-                              controller: manualController,
-                              onChanged: (_) => setState(() {}),
-                              decoration: const InputDecoration(
-                                isDense: true,
-                                labelText: 'Your order link (optional)',
-                                hintText: 'https://… paste from Zomato or Swiggy',
-                                border: OutlineInputBorder(),
-                              ),
-                              keyboardType: TextInputType.url,
-                            ),
-                          ),
-                        if (canCopy || canOpen)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Wrap(
-                              spacing: 4,
-                              runSpacing: 0,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: <Widget>[
-                                if (canCopy)
-                                  TextButton.icon(
-                                    onPressed: () =>
-                                        _copyVendorLink(effectiveUrl),
-                                    icon: const Icon(Icons.copy, size: 18),
-                                    label: const Text('Copy link'),
-                                  ),
-                                if (canOpen)
-                                  TextButton.icon(
-                                    onPressed: () =>
-                                        _openVendorLink(suggestion, index),
-                                    icon: const Icon(Icons.open_in_new, size: 18),
-                                    label: const Text('Open vendor page'),
-                                  ),
-                              ],
-                            ),
-                          ),
-                      ],
+              child: ListView(
+                children: <Widget>[
+                  if (_suggestions.isNotEmpty) ...<Widget>[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Suggested vendors — paste an order link under each, or '
+                        'add your own vendors below.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ),
-                    value: selected,
-                    onChanged: (_) {
-                      setState(() {
-                        if (selected) {
-                          _selected.remove(index);
-                        } else {
-                          _selected.add(index);
-                        }
-                      });
-                    },
-                  );
-                },
+                    ...List<Widget>.generate(_suggestions.length, (int index) {
+                      final suggestion = _suggestions[index];
+                      final selected = _selected.contains(index);
+                      final canOpen = _orderUri(suggestion, index) != null;
+                      final effectiveUrl = _effectiveOrderUrl(suggestion, index);
+                      final canCopy = effectiveUrl.isNotEmpty;
+                      final manualController = _manualUrlByIndex[index];
+                      return CheckboxListTile(
+                        isThreeLine: true,
+                        title: Text(suggestion.restaurantName),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            _suggestionTileSubtitle(suggestion),
+                            if (manualController != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: TextField(
+                                  key: Key('donor_setup_manual_url_$index'),
+                                  controller: manualController,
+                                  onChanged: (_) => setState(() {}),
+                                  decoration: const InputDecoration(
+                                    isDense: true,
+                                    labelText: 'Your order link (optional)',
+                                    hintText:
+                                        'https://… paste from Zomato or Swiggy',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  keyboardType: TextInputType.url,
+                                ),
+                              ),
+                            if (effectiveUrl.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: SelectableText(
+                                  effectiveUrl,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                      ),
+                                ),
+                              ),
+                            if (canCopy || canOpen)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Wrap(
+                                  spacing: 4,
+                                  runSpacing: 0,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: <Widget>[
+                                    if (canCopy)
+                                      TextButton.icon(
+                                        onPressed: () =>
+                                            _copyVendorLink(effectiveUrl),
+                                        icon: const Icon(Icons.copy, size: 18),
+                                        label: const Text('Copy link'),
+                                      ),
+                                    if (canOpen)
+                                      TextButton.icon(
+                                        onPressed: () => _openVendorLink(
+                                          suggestion,
+                                          index,
+                                        ),
+                                        icon: const Icon(
+                                          Icons.open_in_new,
+                                          size: 18,
+                                        ),
+                                        label: const Text('Open vendor page'),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                        value: selected,
+                        onChanged: (_) {
+                          setState(() {
+                            if (selected) {
+                              _selected.remove(index);
+                            } else {
+                              _selected.add(index);
+                            }
+                          });
+                        },
+                      );
+                    }),
+                  ],
+                  const SizedBox(height: 8),
+                  Text(
+                    'Your own vendors',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Add restaurants that were not suggested, with your own order links.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
+                  ..._manualRows.map(
+                    (ManualVendorEntryRow row) => ManualVendorEntryCard(
+                      key: Key('donor_setup_manual_row_${row.id}'),
+                      row: row,
+                      selected: _selectedManualIds.contains(row.id),
+                      onSelectedChanged: (bool value) {
+                        setState(() {
+                          if (value) {
+                            _selectedManualIds.add(row.id);
+                          } else {
+                            _selectedManualIds.remove(row.id);
+                          }
+                        });
+                      },
+                      onRemove: () => _removeManualRow(row.id),
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    key: const Key('donor_setup_add_manual_vendor'),
+                    onPressed: _addManualRow,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add another vendor'),
+                  ),
+                ],
               ),
             ),
             ElevatedButton(
-              onPressed: _selected.isEmpty || _saving ? null : _confirmAndSave,
+              onPressed: !_hasAnythingSelected || _saving ? null : _confirmAndSave,
               child: Text(
                 _saving ? 'Saving...' : 'Confirm and Save Presets',
               ),

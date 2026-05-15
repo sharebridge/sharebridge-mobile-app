@@ -331,6 +331,20 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
     return uri;
   }
 
+  Future<void> _copyPresetLink(String url) async {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: trimmed));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Order link copied to clipboard.')),
+    );
+  }
+
   Future<void> _openPreset(DonorPreset preset) async {
     final uri = _orderUri(preset.orderUrl);
     if (uri == null) {
@@ -590,15 +604,56 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
           ...List<Widget>.generate(_presets.length, (int i) {
             final DonorPreset p = _presets[i];
             final uri = _orderUri(p.orderUrl);
+            final urlText = p.orderUrl.trim();
+            final linksEnabled = _showVendorLinks;
             return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: OutlinedButton.icon(
-                key: Key('field_help_open_vendor_$i'),
-                onPressed: (uri != null && _showVendorLinks)
-                    ? () => _openPreset(p)
-                    : null,
-                icon: const Icon(Icons.open_in_new),
-                label: Text('Open ${p.appName}: ${p.restaurantName}'),
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Card.outlined(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      Text(
+                        '${p.restaurantName} · ${p.appName}',
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      SelectableText(
+                        urlText.isEmpty ? '(no link saved)' : urlText,
+                        key: Key('field_help_vendor_url_$i'),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: urlText.isEmpty
+                              ? colors.onSurfaceVariant
+                              : colors.primary,
+                          decoration: urlText.isEmpty
+                              ? null
+                              : TextDecoration.underline,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        children: <Widget>[
+                          TextButton.icon(
+                            onPressed: linksEnabled && urlText.isNotEmpty
+                                ? () => _copyPresetLink(urlText)
+                                : null,
+                            icon: const Icon(Icons.copy, size: 18),
+                            label: const Text('Copy link'),
+                          ),
+                          FilledButton.tonalIcon(
+                            key: Key('field_help_open_vendor_$i'),
+                            onPressed:
+                                linksEnabled && uri != null ? () => _openPreset(p) : null,
+                            icon: const Icon(Icons.open_in_new, size: 18),
+                            label: const Text('Open in browser'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             );
           }),

@@ -140,12 +140,18 @@ void main() {
 
     final openFinder = find.byKey(const Key('field_help_open_vendor_0'));
     expect(openFinder, findsOneWidget);
-    expect(tester.widget<OutlinedButton>(openFinder).onPressed, isNull);
+    expect(
+      tester.widget<FilledButton>(openFinder).onPressed,
+      isNull,
+    );
 
     await tester.tap(find.byKey(const Key('field_help_copy_instructions')));
     await tester.pumpAndSettle();
 
-    expect(tester.widget<OutlinedButton>(openFinder).onPressed, isNotNull);
+    expect(
+      tester.widget<FilledButton>(openFinder).onPressed,
+      isNotNull,
+    );
     expect(find.textContaining('Instructions copied'), findsOneWidget);
   });
 }
