@@ -142,11 +142,22 @@ class HttpDonorSetupApiClient implements DonorSetupApiClient {
   Future<Map<String, dynamic>> requestInstructionPack({
     required Map<String, dynamic> body,
   }) {
+    return postDonorSeekerJson(
+      path: '/v1/donor-seeker/instruction-pack',
+      body: body,
+    );
+  }
+
+  /// Donor–seeker routes (instruction-pack, order-intents, …).
+  Future<Map<String, dynamic>> postDonorSeekerJson({
+    required String path,
+    required Map<String, dynamic> body,
+  }) {
     return _runWithRetry(
-      policy: retryPolicy,
+      policy: savePresetsRetryPolicy,
       operation: () => _sendJson(
         method: 'POST',
-        uri: Uri.parse('$baseUrl/v1/donor-seeker/instruction-pack'),
+        uri: Uri.parse('$baseUrl$path'),
         body: body,
       ),
     );

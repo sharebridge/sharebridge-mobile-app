@@ -4,7 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/api_delivery_instructions_request.dart';
-import '../../application/stub_delivery_instructions_request.dart';
+import '../../data/http_order_intent_client.dart';
+import '../../domain/models/instruction_pack_result.dart';
 import '../../../donor_setup/application/load_presets_usecase.dart';
 import '../../../donor_setup/data/auth_context.dart';
 import '../../../donor_setup/data/donor_setup_api_exceptions.dart';
@@ -12,8 +13,8 @@ import '../../../donor_setup/data/donor_setup_repository_impl.dart';
 import '../../../donor_setup/data/http_donor_setup_api_client.dart';
 import '../../../donor_setup/domain/models/donor_preset.dart';
 
-/// Async AI instruction request (stub or real HTTP client later).
-typedef DeliveryInstructionsRequest = Future<String> Function({
+/// Async instruction-pack request (API or test stub).
+typedef DeliveryInstructionsRequest = Future<InstructionPackResult> Function({
   required List<DonorPreset> presets,
   required bool hasReferencePhoto,
   String? verbalHandoverNotes,
@@ -63,6 +64,10 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
   bool _loadingPresets = true;
   String? _errorText;
   bool _showVendorLinks = false;
+  String? _packId;
+  String? _orderIntentId;
+  bool _registeringOrderIntent = false;
+  String? _orderIntentError;
 
   _OfferHelpStep _step = _OfferHelpStep.guidance;
   XFile? _referencePhoto;
@@ -72,7 +77,7 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
   DeliveryInstructionsRequest get _deliveryRequest =>
       widget.deliveryInstructionsRequest ?? _defaultDeliveryInstructionsRequest;
 
-  Future<String> _defaultDeliveryInstructionsRequest({
+  Future<InstructionPackResult> _defaultDeliveryInstructionsRequest({
     required List<DonorPreset> presets,
     required bool hasReferencePhoto,
     String? verbalHandoverNotes,
@@ -168,6 +173,9 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
         _step = _OfferHelpStep.photoAndAi;
         _instructions = '';
         _showVendorLinks = false;
+        _packId = null;
+        _orderIntentId = null;
+        _orderIntentError = null;
       }
     });
   }
@@ -224,7 +232,7 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
   Future<void> _generateInstructions() async {
     setState(() => _generatingInstructions = true);
     try {
-      final text = await _deliveryRequest(
+      final result = await _deliveryRequest(
         presets: _presets,
         hasReferencePhoto: _referencePhoto != null,
         verbalHandoverNotes: _verbalNotesController.text,
@@ -233,9 +241,13 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
         return;
       }
       setState(() {
-        _instructions = text;
+        _instructions = result.deliveryInstructions;
+        _packId = result.packId;
         _generatingInstructions = false;
         _step = _OfferHelpStep.deliveryReady;
+        _showVendorLinks = false;
+        _orderIntentId = null;
+        _orderIntentError = null;
       });
     } catch (e) {
       if (!mounted) {
@@ -256,19 +268,55 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
       return;
     }
     setState(() {
-      _showVendorLinks = true;
+      _registeringOrderIntent = true;
+      _orderIntentError = null;
     });
     await Clipboard.setData(ClipboardData(text: text));
-    if (!mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Instructions copied. Open a saved vendor app below and paste into delivery notes.',
+
+    final packId = _packId ?? 'pack-local-${DateTime.now().millisecondsSinceEpoch}';
+    try {
+      final registration = await HttpOrderIntentClient(
+        baseUrl: _defaultApiBaseUrl,
+        authContext: _authContext,
+      ).registerInstructionsCopied(
+        packId: packId,
+        presets: _presets,
+        hasReferencePhoto: _referencePhoto != null,
+        verbalHandoverNotes: _verbalNotesController.text,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showVendorLinks = true;
+        _orderIntentId = registration.orderIntentId;
+        _registeringOrderIntent = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Instructions copied. Order intent ${registration.orderIntentId} registered.',
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showVendorLinks = true;
+        _registeringOrderIntent = false;
+        _orderIntentError =
+            'Could not register order intent on server; you can still open a vendor app.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Instructions copied. Open a vendor app below and paste into delivery notes.',
+          ),
+        ),
+      );
+    }
   }
 
   Uri? _orderUri(String raw) {
@@ -315,7 +363,9 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
       case _OfferHelpStep.photoAndAi:
         return 'Step 2 of 3 · Photo and AI';
       case _OfferHelpStep.deliveryReady:
-        return 'Step 3 of 3 · Paste in vendor app';
+        return _orderIntentId != null
+            ? 'Step 3 of 3 · Place order'
+            : 'Step 3 of 3 · Copy and place order';
     }
   }
 
@@ -470,10 +520,64 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
         const SizedBox(height: 16),
         FilledButton.icon(
           key: const Key('field_help_copy_instructions'),
-          onPressed: _instructions.trim().isEmpty ? null : _copyInstructions,
-          icon: const Icon(Icons.copy),
-          label: const Text('Copy instructions'),
+          onPressed: _instructions.trim().isEmpty || _registeringOrderIntent
+              ? null
+              : _copyInstructions,
+          icon: _registeringOrderIntent
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.copy),
+          label: Text(
+            _registeringOrderIntent
+                ? 'Registering order…'
+                : 'Copy instructions and continue',
+          ),
         ),
+        if (_orderIntentId != null) ...<Widget>[
+          const SizedBox(height: 16),
+          Card.outlined(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Order intent registered',
+                    style: theme.textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Reference: $_orderIntentId',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'What to do next',
+                    style: theme.textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 6),
+                  const Text('1. Open your vendor app below.'),
+                  const Text(
+                    '2. Place the order and paste the copied text into delivery instructions.',
+                  ),
+                  const Text(
+                    '3. Complete payment in the vendor app.',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+        if (_orderIntentError != null) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            _orderIntentError!,
+            style: TextStyle(color: colors.error),
+          ),
+        ],
         if (_presets.isNotEmpty) ...<Widget>[
           const SizedBox(height: 28),
           Text(

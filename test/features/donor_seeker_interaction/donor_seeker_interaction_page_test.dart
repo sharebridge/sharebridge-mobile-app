@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sharingbridge_mobile_app/features/donor_seeker_interaction/application/delivery_instruction_stub.dart';
+import 'package:sharingbridge_mobile_app/features/donor_seeker_interaction/domain/models/instruction_pack_result.dart';
 import 'package:sharingbridge_mobile_app/features/donor_seeker_interaction/presentation/pages/donor_seeker_interaction_page.dart';
 import 'package:sharingbridge_mobile_app/features/donor_setup/application/load_presets_usecase.dart';
 import 'package:sharingbridge_mobile_app/features/donor_setup/data/auth_context.dart';
@@ -111,10 +112,13 @@ void main() {
             required bool hasReferencePhoto,
             String? verbalHandoverNotes,
           }) async {
-            return buildDeliveryInstructionsStub(
-              presets,
-              referencePhotoIncluded: hasReferencePhoto,
-              verbalHandoverNotes: verbalHandoverNotes,
+            return InstructionPackResult(
+              deliveryInstructions: buildDeliveryInstructionsStub(
+                presets,
+                referencePhotoIncluded: hasReferencePhoto,
+                verbalHandoverNotes: verbalHandoverNotes,
+              ),
+              packId: 'test-pack',
             );
           },
         ),

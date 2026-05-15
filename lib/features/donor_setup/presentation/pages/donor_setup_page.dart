@@ -50,8 +50,8 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   final TextEditingController _manualAreaController = TextEditingController(
     text: 'Chennai',
   );
-  final TextEditingController _customOrderLinkController =
-      TextEditingController();
+  final Map<int, TextEditingController> _manualUrlByIndex =
+      <int, TextEditingController>{};
   late final AuthContext _authContext;
   late final SuggestVendorsUseCase _suggestVendorsUseCase;
   late final ConfirmPresetsUseCase _confirmPresetsUseCase;
@@ -141,6 +141,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
           );
         _selected.clear();
         _suggestionsFromSearch = false;
+        _syncManualUrlControllers(_suggestions.length);
         _statusText = presets.isNotEmpty
             ? 'Loaded saved presets from server.'
             : 'No saved presets on server yet.';
@@ -180,17 +181,35 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
   void dispose() {
     _queryController.dispose();
     _manualAreaController.dispose();
-    _customOrderLinkController.dispose();
+    _disposeManualUrlControllers();
     super.dispose();
   }
 
-  /// Donor-pasted order page from vendor app; overrides suggestion search links.
-  String _effectiveOrderUrl(VendorSuggestion suggestion) {
-    final custom = _customOrderLinkController.text.trim();
-    if (custom.isNotEmpty) {
-      final uri = Uri.tryParse(custom);
+  void _disposeManualUrlControllers() {
+    for (final TextEditingController c in _manualUrlByIndex.values) {
+      c.dispose();
+    }
+    _manualUrlByIndex.clear();
+  }
+
+  void _syncManualUrlControllers(int count) {
+    final keysToRemove =
+        _manualUrlByIndex.keys.where((int k) => k >= count).toList();
+    for (final int k in keysToRemove) {
+      _manualUrlByIndex.remove(k)?.dispose();
+    }
+    for (int i = 0; i < count; i++) {
+      _manualUrlByIndex.putIfAbsent(i, TextEditingController.new);
+    }
+  }
+
+  /// Donor-pasted order page from vendor app; overrides search link for that row.
+  String _effectiveOrderUrl(VendorSuggestion suggestion, int index) {
+    final manual = _manualUrlByIndex[index]?.text.trim() ?? '';
+    if (manual.isNotEmpty) {
+      final uri = Uri.tryParse(manual);
       if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
-        return custom;
+        return manual;
       }
     }
     return suggestion.orderUrl.trim();
@@ -200,6 +219,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     setState(() {
       _presetsLoadGeneration++;
       _loading = true;
+      _disposeManualUrlControllers();
       _suggestions.clear();
       _selected.clear();
       _errorText = null;
@@ -217,6 +237,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       setState(() {
         _suggestions.addAll(results);
         _suggestionsFromSearch = true;
+        _syncManualUrlControllers(results.length);
       });
     } catch (error) {
       setState(() {
@@ -246,7 +267,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
             final suggestion = _suggestions[index];
             return DonorPreset(
               restaurantName: suggestion.restaurantName,
-              orderUrl: _effectiveOrderUrl(suggestion),
+              orderUrl: _effectiveOrderUrl(suggestion, index),
               menuItems: suggestion.menuItems,
               appName: suggestion.appName,
               source: 'ai_suggestion',
@@ -349,6 +370,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
         ..addAll(suggestions);
       _selected.clear();
       _suggestionsFromSearch = false;
+      _syncManualUrlControllers(_suggestions.length);
       _statusText = 'Using cached presets (offline fallback).';
     });
     return true;
@@ -361,6 +383,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
       return;
     }
     setState(() {
+      _disposeManualUrlControllers();
       _suggestions.clear();
       _selected.clear();
       _suggestionsFromSearch = false;
@@ -383,8 +406,8 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     );
   }
 
-  Uri? _orderUri(VendorSuggestion suggestion) {
-    final uri = Uri.tryParse(_effectiveOrderUrl(suggestion));
+  Uri? _orderUri(VendorSuggestion suggestion, int index) {
+    final uri = Uri.tryParse(_effectiveOrderUrl(suggestion, index));
     if (uri == null ||
         !(uri.scheme == 'http' || uri.scheme == 'https')) {
       return null;
@@ -412,8 +435,8 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
     );
   }
 
-  Future<void> _openVendorLink(VendorSuggestion suggestion) async {
-    final uri = _orderUri(suggestion);
+  Future<void> _openVendorLink(VendorSuggestion suggestion, int index) async {
+    final uri = _orderUri(suggestion, index);
     if (uri == null) {
       if (!mounted) {
         return;
@@ -490,18 +513,6 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
                 hintText: 'Enter city/area (e.g. Chennai)',
               ),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _customOrderLinkController,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                labelText: 'Your order page link (optional)',
-                hintText:
-                    'Paste the link from Zomato/Swiggy after you open the restaurant',
-                helperText:
-                    'Search links open the vendor app; paste your exact order URL here before saving.',
-              ),
-            ),
             const SizedBox(height: 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -541,15 +552,24 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
                   style: const TextStyle(color: Colors.green),
                 ),
               ),
+            if (_suggestions.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Paste an order link under each restaurant after you find it in the vendor app.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
             Expanded(
               child: ListView.builder(
                 itemCount: _suggestions.length,
                 itemBuilder: (BuildContext context, int index) {
                   final suggestion = _suggestions[index];
                   final selected = _selected.contains(index);
-                  final canOpen = _orderUri(suggestion) != null;
-                  final effectiveUrl = _effectiveOrderUrl(suggestion);
+                  final canOpen = _orderUri(suggestion, index) != null;
+                  final effectiveUrl = _effectiveOrderUrl(suggestion, index);
                   final canCopy = effectiveUrl.isNotEmpty;
+                  final manualController = _manualUrlByIndex[index];
                   return CheckboxListTile(
                     isThreeLine: true,
                     title: Text(suggestion.restaurantName),
@@ -558,6 +578,22 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
                         _suggestionTileSubtitle(suggestion),
+                        if (manualController != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: TextField(
+                              key: Key('donor_setup_manual_url_$index'),
+                              controller: manualController,
+                              onChanged: (_) => setState(() {}),
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                labelText: 'Your order link (optional)',
+                                hintText: 'https://… paste from Zomato or Swiggy',
+                                border: OutlineInputBorder(),
+                              ),
+                              keyboardType: TextInputType.url,
+                            ),
+                          ),
                         if (canCopy || canOpen)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
@@ -576,7 +612,7 @@ class _DonorSetupPageState extends State<DonorSetupPage> {
                                 if (canOpen)
                                   TextButton.icon(
                                     onPressed: () =>
-                                        _openVendorLink(suggestion),
+                                        _openVendorLink(suggestion, index),
                                     icon: const Icon(Icons.open_in_new, size: 18),
                                     label: const Text('Open vendor page'),
                                   ),

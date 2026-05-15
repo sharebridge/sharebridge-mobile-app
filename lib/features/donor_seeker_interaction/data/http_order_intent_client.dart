@@ -2,16 +2,15 @@ import '../../donor_setup/data/auth_context.dart';
 import '../../donor_setup/data/donor_setup_api_exceptions.dart';
 import '../../donor_setup/data/http_donor_setup_api_client.dart';
 import '../../donor_setup/domain/models/donor_preset.dart';
-import '../domain/models/instruction_pack_result.dart';
+import '../domain/models/order_intent_registration.dart';
 
-/// Calls integration-service instruction-pack API (orchestration when enabled).
-class HttpInstructionPackClient {
-  HttpInstructionPackClient({
+class HttpOrderIntentClient {
+  HttpOrderIntentClient({
     required this.baseUrl,
     AuthContext? authContext,
-    HttpDonorSetupApiClient? donorSetupClient,
+    HttpDonorSetupApiClient? api,
   })  : _authContext = authContext ?? AuthContext.fromEnvironment(),
-        _api = donorSetupClient ??
+        _api = api ??
             HttpDonorSetupApiClient(
               baseUrl: baseUrl,
               authContext: authContext,
@@ -21,25 +20,23 @@ class HttpInstructionPackClient {
   final AuthContext _authContext;
   final HttpDonorSetupApiClient _api;
 
-  Future<InstructionPackResult> requestDeliveryInstructions({
+  Future<OrderIntentRegistration> registerInstructionsCopied({
+    required String packId,
     required List<DonorPreset> presets,
     required bool hasReferencePhoto,
     String? verbalHandoverNotes,
-    double? lat,
-    double? lng,
-    String? locationLabel,
+    DonorPreset? selectedPreset,
   }) async {
-    final decoded = await _api.requestInstructionPack(
+    final decoded = await _api.postDonorSeekerJson(
+      path: '/v1/donor-seeker/order-intents',
       body: <String, dynamic>{
         'user_id': _authContext.userId,
+        'pack_id': packId,
+        'status': 'instructions_copied',
         'has_reference_photo': hasReferencePhoto,
         if (verbalHandoverNotes != null && verbalHandoverNotes.trim().isNotEmpty)
           'verbal_handover_notes': verbalHandoverNotes.trim(),
-        if (lat != null) 'lat': lat,
-        if (lng != null) 'lng': lng,
-        if (locationLabel != null && locationLabel.trim().isNotEmpty)
-          'location_label': locationLabel.trim(),
-        'presets': presets
+        'presets_snapshot': presets
             .map(
               (DonorPreset p) => <String, dynamic>{
                 'restaurant_name': p.restaurantName,
@@ -49,19 +46,26 @@ class HttpInstructionPackClient {
               },
             )
             .toList(),
+        if (selectedPreset != null)
+          'selected_preset': <String, dynamic>{
+            'restaurant_name': selectedPreset.restaurantName,
+            'app_name': selectedPreset.appName,
+            'order_url': selectedPreset.orderUrl,
+          },
       },
     );
 
-    final instructions = decoded['delivery_instructions'];
-    if (instructions is! String || instructions.trim().isEmpty) {
+    final id = decoded['order_intent_id']?.toString();
+    if (id == null || id.isEmpty) {
       throw const DonorSetupResponseException(
-        'delivery_instructions must be a non-empty string',
+        'order_intent_id must be a non-empty string',
       );
     }
-    final packId = decoded['pack_id']?.toString();
-    return InstructionPackResult(
-      deliveryInstructions: instructions,
-      packId: packId != null && packId.isNotEmpty ? packId : null,
+    return OrderIntentRegistration(
+      orderIntentId: id,
+      packId: decoded['pack_id']?.toString() ?? packId,
+      status: decoded['status']?.toString() ?? 'instructions_copied',
+      createdAt: decoded['created_at']?.toString() ?? '',
     );
   }
 }
