@@ -69,6 +69,7 @@ void main() {
 
     expect(find.text('Offer food help'), findsWidgets);
     expect(find.textContaining('Quick guidance'), findsOneWidget);
+    expect(find.textContaining('You decide whether to continue'), findsOneWidget);
   });
 
   testWidgets('field page loads instructions and enables vendors after copy', (

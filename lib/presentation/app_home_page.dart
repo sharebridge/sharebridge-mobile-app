@@ -43,7 +43,7 @@ class AppHomePage extends StatelessWidget {
               leading: const Icon(Icons.volunteer_activism_outlined),
               title: const Text('Offer food help'),
               subtitle: const Text(
-                'Someone is asking for help now — consent, quick safety check, and beneficiary details (BRD steps 2–5).',
+                'Someone is asking for help now — quick guidance, consent, and beneficiary details (BRD steps 2–5).',
               ),
               onTap: () {
                 Navigator.of(context).push(

@@ -384,6 +384,19 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
   }
 
   Widget _buildGuidanceBody(ThemeData theme) {
+    const List<String> bullets = <String>[
+      'Consent — Only proceed if the person is okay receiving help and '
+          'with how you identify them for the courier.',
+      'Your surroundings — Prefer a visible, public spot. Avoid isolated '
+          'areas. If you feel unsure, do not hand over food or place an '
+          'order yet.',
+      'Time and visibility — Take extra care after dark. You can postpone '
+          'or move to a better spot.',
+      'Photos — Ask before taking a reference photo. A respectful verbal '
+          'description is fine if they prefer not to be photographed.',
+      'Your decision — SharingBridge does not verify that a place is '
+          '"safe." You decide whether to continue.',
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -397,14 +410,17 @@ class _DonorSeekerInteractionPageState extends State<DonorSeekerInteractionPage>
           'the courier to complete the handover with dignity.',
           style: theme.textTheme.bodyMedium,
         ),
-        const SizedBox(height: 12),
-        Text(
-          'Before taking a photo to identify the person receiving help, '
-          'ask for their consent. If they prefer not to be photographed, '
-          'use a respectful verbal description instead.',
-          style: theme.textTheme.bodyMedium,
-        ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 16),
+        for (final String line in bullets) ...<Widget>[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(
+              '• $line',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+        ],
+        const SizedBox(height: 18),
         FilledButton(
           key: const Key('field_help_continue_guidance'),
           onPressed: () {
